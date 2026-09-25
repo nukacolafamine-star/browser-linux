@@ -94,8 +94,12 @@ def screendump(name):
     header = re.match(rb"P6\s+(\d+)\s+(\d+)\s+255\s", data)
     assert header, "Expected binary PPM framebuffer"
     pixels = data[header.end():]
+    # Share of sampled pixels that are not near-black (the launcher shows a
+    # black loading screen until its web interface has painted).
+    samples = range(0, len(pixels) - 2, 3 * 17)
+    lit = sum(1 for i in samples if pixels[i] + pixels[i + 1] + pixels[i + 2] > 96)
     return {"width": int(header[1]), "height": int(header[2]), "distinctByteValues": len(set(pixels)),
-            "sha256": hashlib.sha256(data).hexdigest()}
+            "litFraction": round(lit / max(1, len(samples)), 3), "sha256": hashlib.sha256(data).hexdigest()}
 
 
 def rebuild_disk():
@@ -225,8 +229,19 @@ try:
                 time.sleep(15)
             launcher["windows"] = windows
             launcher["windowSeconds"] = round(time.monotonic() - launch_started, 3)
-            time.sleep(20)  # let the web view paint before the screenshot
-            launcher["screen"] = screendump("launcher.ppm")
+            # Wait for the web interface (sign-in page) to replace the loading screen.
+            ui_deadline = time.monotonic() + 300
+            while launcher.get("opened"):
+                time.sleep(15)
+                launcher["screen"] = screendump("launcher.ppm")
+                if launcher["screen"]["litFraction"] > 0.25:
+                    launcher["interfaceSeconds"] = round(time.monotonic() - launch_started, 3)
+                    break
+                if time.monotonic() > ui_deadline:
+                    break
+            if "screen" not in launcher:
+                time.sleep(20)
+                launcher["screen"] = screendump("launcher.ppm")
             launcher["log"] = run("tail -n 40 /tmp/minecraft-launcher.log; ls -la /home/user/.minecraft /home/user/.minecraft/launcher 2>&1 | head -n 40; tail -n 30 /home/user/.minecraft/launcher_log.txt 2>/dev/null", "LAUNCHLOG")[-8000:]
             missing = run("for f in /home/user/.minecraft/launcher/minecraft-launcher /home/user/.minecraft/launcher/*.so; do "
                           "ldd \"$f\" 2>/dev/null | grep 'not found' | sed \"s|^|$(basename $f): |\"; done", "LDD", 120)
@@ -236,6 +251,8 @@ try:
                 report["checks"].append(f"Official Minecraft Launcher bootstrap downloaded from Mojang and opened its updater in {launcher['firstWindowSeconds']}s")
             if launcher["opened"]:
                 report["checks"].append(f"The Minecraft Launcher's main window opened in {launcher['windowSeconds']}s")
+            if launcher.get("interfaceSeconds"):
+                report["checks"].append(f"The launcher's interface painted in {launcher['interfaceSeconds']}s")
         except Exception as error:
             launcher["error"] = str(error)
 
