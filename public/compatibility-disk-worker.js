@@ -26,23 +26,55 @@ class SyncFile {
   close() {this.handle.close();}
 }
 
+// Fallback when the private file system is unavailable. Kept in 1 MiB pages:
+// one growing array needed a single contiguous allocation twice the size of
+// Linux's changes, which failed at about 500 MiB.
+const PAGE = 1048576;
 class MemoryFile {
-  constructor() {this.bytes = new Uint8Array(0);}
+  constructor() {this.pages = new Map(); this.size = 0;}
   read(buffer, offset) {
-    const count = Math.max(0, Math.min(buffer.length, this.bytes.length - offset));
-    buffer.set(this.bytes.subarray(offset, offset + count));
+    const count = Math.max(0, Math.min(buffer.length, this.size - offset));
+    for (let done = 0; done < count;) {
+      const at = offset + done, within = at % PAGE, length = Math.min(count - done, PAGE - within);
+      const page = this.pages.get(Math.floor(at / PAGE));
+      if (page) buffer.set(page.subarray(within, within + length), done); else buffer.fill(0, done, done + length);
+      done += length;
+    }
     return count;
   }
   write(buffer, offset) {
-    if (offset + buffer.length > this.bytes.length) {
-      const grown = new Uint8Array(Math.max(offset + buffer.length, this.bytes.length * 2));
-      grown.set(this.bytes); this.bytes = grown;
+    for (let done = 0; done < buffer.length;) {
+      const at = offset + done, within = at % PAGE, length = Math.min(buffer.length - done, PAGE - within);
+      const index = Math.floor(at / PAGE);
+      let page = this.pages.get(index);
+      if (!page) this.pages.set(index, page = new Uint8Array(PAGE));
+      page.set(buffer.subarray(done, done + length), within);
+      done += length;
     }
-    this.bytes.set(buffer, offset);
+    this.size = Math.max(this.size, offset + buffer.length);
     return buffer.length;
   }
   flush() {}
-  close() {}
+  close() {this.pages.clear();}
+}
+
+// A temporary disk's changes go to scratch files in the private file system,
+// so that they do not compete with the emulator for the tab's memory. The
+// files are removed when the session closes; leftovers of sessions that
+// ended without closing are removed by the next temporary session.
+let scratch = null;
+async function openScratch() {
+  const root = await navigator.storage.getDirectory();
+  const parent = await root.getDirectoryHandle('browser-linux-scratch', {create: true});
+  for await (const name of parent.keys()) {
+    try {await parent.removeEntry(name, {recursive: true});} catch {} // still open in another tab
+  }
+  const name = crypto.randomUUID();
+  const directory = await parent.getDirectoryHandle(name, {create: true});
+  const data = new SyncFile(await (await directory.getFileHandle('data.bin', {create: true})).createSyncAccessHandle());
+  const map = new SyncFile(await (await directory.getFileHandle('map.bin', {create: true})).createSyncAccessHandle());
+  scratch = {parent, name};
+  return {data, map};
 }
 
 async function fetchChunk(index) {
@@ -90,7 +122,12 @@ async function open({manifest, manifestSha256, baseURL, namespace, temporary}) {
   }
   let data, map;
   if (temporary) {
-    data = new MemoryFile(); map = new MemoryFile();
+    try {
+      ({data, map} = await openScratch());
+      handles = [data, map];
+    } catch {
+      data = new MemoryFile(); map = new MemoryFile();
+    }
   } else {
     if (!/^[a-z0-9-]{8,80}$/.test(namespace)) throw new Error('Invalid disk name');
     const root = await navigator.storage.getDirectory();
@@ -133,6 +170,10 @@ async function close() {
   if (store) await store.flush();
   for (const handle of handles) handle.close();
   handles = []; store = null;
+  if (scratch) {
+    await scratch.parent.removeEntry(scratch.name, {recursive: true}).catch(() => {});
+    scratch = null;
+  }
 }
 
 const transferable = bytes => bytes.byteOffset === 0 && bytes.byteLength === bytes.buffer.byteLength ? bytes : bytes.slice();
