@@ -1,26 +1,63 @@
 diff --git a/tcg/wasm32.c b/tcg/wasm32.c
-index 97ed765..0f34456 100644
+index 97ed765..704b66f 100644
 --- a/tcg/wasm32.c
 +++ b/tcg/wasm32.c
-@@ -104,7 +104,14 @@ struct instance_info {
+@@ -102,10 +102,28 @@ __thread uint32_t instance_garbage_collected_local = 0;
+ struct instance_info {
+     uint8_t *tb;
      int fidx;
++    int used; /* set when the module runs, cleared by the eviction clock */
  };
  
 -#define MAX_INSTANCE_ALIVE 15000
+-#define INSTANCE_RUNNING_LEN MAX_INSTANCE_ALIVE
 +/*
++ * Compiled translation blocks are kept per vCPU thread: at most
++ * MAX_INSTANCE_THREAD each and MAX_INSTANCE_ALIVE in total.
++ *
 + * Modules released from the function table are counted as freed right away.
 + * Waiting for a FinalizationRegistry report stalled compilation for good: a
 + * busy worker rarely collects garbage, so once the cap was reached every
 + * translation block ran in the interpreter. The collector still reclaims the
 + * modules; allocating new ones creates the pressure that triggers it.
++ *
++ * Eviction frees a quarter of the thread's modules with a second-chance
++ * clock that keeps those which ran since its last pass, and an evicted block
++ * must run INSTANTIATE_NUM more times before it is compiled again. Evicting
++ * the oldest half and recompiling it at once made busy threads spend most of
++ * their time compiling the same blocks again.
 + */
-+#define MAX_INSTANCE_ALIVE 60000
- #define INSTANCE_RUNNING_LEN MAX_INSTANCE_ALIVE
++#define MAX_INSTANCE_ALIVE 120000
++#define MAX_INSTANCE_THREAD 50000
++#define INSTANCE_RUNNING_LEN MAX_INSTANCE_THREAD
  __thread struct instance_info instance_running[INSTANCE_RUNNING_LEN];
  __thread int instance_running_begin = 0;
-@@ -132,16 +139,8 @@ static int instance_pending_gc_local()
+ __thread int instance_running_end = 0;
+@@ -116,7 +134,8 @@ __thread static int to_remove_instance_idx = 0;
  
- static void check_instance_garbage_collected()
+ static bool can_add_instance()
+ {
+-    return qatomic_read(&instance_alive_global) < MAX_INSTANCE_ALIVE;
++    return instance_running_local < MAX_INSTANCE_THREAD &&
++           qatomic_read(&instance_alive_global) < MAX_INSTANCE_ALIVE;
+ }
+ 
+ static void inc_instance_local()
+@@ -125,49 +144,64 @@ static void inc_instance_local()
+     instance_alive_local++;
+ }
+ 
+-static int instance_pending_gc_local()
++static void check_instance_garbage_collected()
+ {
+-    return (instance_alive_local - instance_running_local);
++    /* Released modules were already counted (see MAX_INSTANCE_ALIVE). */
++    instance_garbage_collected_local = 0;
+ }
+ 
+-static void check_instance_garbage_collected()
++/* The block still refers to this entry: it was not retranslated since. */
++static bool instance_owns_tb(struct instance_info *e)
  {
 -    if (instance_garbage_collected_local > 0) {
 -        if (instance_garbage_collected_local > instance_pending_gc_local()) {
@@ -32,17 +69,81 @@ index 97ed765..0f34456 100644
 -        instance_alive_local -= instance_garbage_collected_local;
 -        instance_garbage_collected_local = 0;
 -    }
-+    /* Released modules were already counted (see MAX_INSTANCE_ALIVE). */
-+    instance_garbage_collected_local = 0;
++    return e->tb &&
++           *(uint32_t *)((uint32_t)e->tb + export_vec_off) == (uint32_t)e;
  }
  
  static void remove_instance_running_local()
-@@ -159,6 +158,8 @@ static void remove_instance_running_local()
+ {
+-    if (instance_pending_gc_local() > 0) {
+-        return;
+-    }
+-    int to_remove = instance_running_local / 2;
+-    for (int i = 0; i < to_remove; i++) {
+-        instance_running[instance_running_begin].tb = NULL;
+-        to_remove_instance[to_remove_instance_idx++] = instance_running[instance_running_begin].fidx;
++    int to_remove = instance_running_local / 4 + 1;
++    int limit = 2 * instance_running_local;
++    int removed = 0;
++
++    for (int examined = 0; examined < limit && removed < to_remove &&
++                           instance_running_local > 0; examined++) {
++        struct instance_info *e = &instance_running[instance_running_begin];
++        struct instance_info entry = *e;
++        bool keep = entry.used && instance_owns_tb(e);
++
++        e->tb = NULL;
++        instance_running_begin = (instance_running_begin + 1) % INSTANCE_RUNNING_LEN;
++        if (keep) {
++            /* Ran since the last pass: move it to the back of the queue. */
++            struct instance_info *slot = &instance_running[instance_running_end];
++            slot->tb = entry.tb;
++            slot->fidx = entry.fidx;
++            slot->used = 0;
++            *(uint32_t *)((uint32_t)entry.tb + export_vec_off) = (uint32_t)slot;
++            instance_running_end = (instance_running_end + 1) % INSTANCE_RUNNING_LEN;
++            continue;
++        }
++        to_remove_instance[to_remove_instance_idx++] = entry.fidx;
+         instance_running_local--;
+-        instance_running_begin = (instance_running_begin + 1)%INSTANCE_RUNNING_LEN;
++        removed++;
+     }
      if (to_remove_instance_idx > 0) {
          remove_module_js();
      }
-+    instance_alive_local -= to_remove;
-+    qatomic_sub(&instance_alive_global, to_remove);
++    instance_alive_local -= removed;
++    qatomic_sub(&instance_alive_global, removed);
  }
  
  static void add_instance_running_local(int fidx, void *tb_ptr)
+ {
+-    instance_running[instance_running_end].tb = tb_ptr;
+-    instance_running[instance_running_end].fidx = fidx;
++    struct instance_info *slot = &instance_running[instance_running_end];
++
++    slot->tb = tb_ptr;
++    slot->fidx = fidx;
++    slot->used = 1;
+ 
+     int tb_export_ptr = (uint32_t)tb_ptr + export_vec_off;
+-    *(uint32_t*)tb_export_ptr = (uint32_t)(&(instance_running[instance_running_end]));
++    *(uint32_t*)tb_export_ptr = (uint32_t)slot;
+ 
+     instance_running_end  = (instance_running_end+1)%INSTANCE_RUNNING_LEN;
+     inc_instance_local();
+@@ -183,11 +217,13 @@ static int get_instance_running_local(void *tb_ptr)
+         return 0;
+     }
+     if (elm->tb != tb_ptr) {
++        /* Evicted: the block has to become hot again to be recompiled. */
+         *(uint32_t*)tb_export_ptr = 0;
+         int tb_counter_ptr = (uint32_t)tb_ptr + counter_vec_off;
+-        *(uint32_t*)tb_counter_ptr = INSTANTIATE_NUM; // will be instanciated immediately
++        *(uint32_t*)tb_counter_ptr = 0;
+         return 0;
+     }
++    elm->used = 1;
+     return elm->fidx;
+ }
+ 

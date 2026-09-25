@@ -36,9 +36,23 @@ Patches in `tools/compatibility-build/patches/qemu/` are applied to the pinned f
 4. **`getaddrinfo()` without `AI_ADDRCONFIG`.** Emscripten fails every lookup with that flag, which prevented QEMU from reaching the in-page disk and monitor endpoints.
 5. **Population count in the WebAssembly JIT.** Translated `POPCNT` read the wrong operands and left the upper half of 64-bit results undefined. The guest kernel counts bits while registering its netlink families, so it panicked at boot.
 6. **More than 2 GiB of guest memory.** QEMU refuses more than 2047 MB on 32-bit hosts, and musl's `mmap()` refuses any length of 2 GiB or more there. WebAssembly addresses its linear memory as unsigned up to 4 GiB, and the JIT treats host addresses as unsigned (see 3), so the browser build allows up to 3 GiB and allocates guest RAM from the heap.
-7. **JIT module accounting.** The JIT compiles each hot translation block into its own WebAssembly module and caps how many exist. Evicted modules were only counted as freed when the JavaScript garbage collector reported them, which a busy worker almost never does: once the first 15,000 had been compiled (before the desktop finished starting), every block ran in the interpreter, several hundred times slower than native code. Evicted modules now count as freed immediately, and the cap is 60,000.
+7. **JIT module management.** The JIT compiles each hot translation block into its own WebAssembly module and caps how many exist. Evicted modules were only counted as freed when the JavaScript garbage collector reported them, which a busy worker almost never does: once the first 15,000 had been compiled (before the desktop finished starting), every block ran in the interpreter. Eviction then dropped the oldest half of a thread's modules and recompiled them at once, so a busy vCPU thread compiled 4.2 million modules in 25 minutes. Evicted modules now count as freed immediately, each vCPU thread keeps up to 50,000 (120,000 in total), eviction frees a quarter with a second-chance clock that keeps recently used blocks, and an evicted block must become hot again before it is recompiled.
 
-The build also fixes two problems outside QEMU's source. **Thread stacks:** Emscripten gives every thread a 64 KiB stack by default, while QEMU keeps a 68 KiB network receive buffer on the stack, so each packet from the network overwrote heap memory below the main loop thread's stack and the first TCP connection crashed the emulator; the browser build uses an 8 MiB main stack and 2 MiB thread stacks. **Socket reads:** a fix is applied to the Emscripten SDK before linking (`tools/compatibility-build/patch-emscripten.py`): its socket `recvmsg()` placed the second and later scatter/gather buffers at the wrong address. QEMU's NBD client reads disk data directly into guest pages with such reads, so the guest saw corrupted disk blocks (ext4 reported corrupted group descriptors) while other memory was overwritten.
+The build also fixes three problems outside QEMU's source. **Thread stacks:** Emscripten gives every thread a 64 KiB stack by default, while QEMU keeps a 68 KiB network receive buffer on the stack, so each packet from the network overwrote heap memory below the main loop thread's stack and the first TCP connection crashed the emulator; the browser build uses an 8 MiB main stack and 2 MiB thread stacks. **Socket reads:** a fix is applied to the Emscripten SDK before linking (`tools/compatibility-build/patch-emscripten.py`): its socket `recvmsg()` placed the second and later scatter/gather buffers at the wrong address. QEMU's NBD client reads disk data directly into guest pages with such reads, so the guest saw corrupted disk blocks (ext4 reported corrupted group descriptors) while other memory was overwritten. **libffi above 2 GiB:** the interpreter calls helpers through libffi, whose JavaScript glue indexed the heap with signed shifts; `patch-ffi-glue.py` makes them unsigned after linking, without which guests with 2 GiB or more crashed.
+
+## In the browser
+
+Measured in Chromium 152 on an 8-core desktop (i7-9700K), 2 virtual processors, temporary disk:
+
+| | 1 GiB guest | 2 GiB guest |
+|---|---|---|
+| Serial shell | 89 s | 99 s |
+| Weston desktop (Pixman) | about 2 min | about 2 min |
+| Plain HTTP download through the relay | 2.9–3.9 MB/s | |
+| HTTPS download (8 MB, including the handshake) | 0.9 MB/s | |
+| TLS handshake with Mojang's servers (curl) | 7.1–7.7 s before the JIT fix (dropped) | 3.1 s |
+
+Mojang's servers (Azure Front Door) close a TLS connection whose handshake is not finished within about 5 seconds of the ClientHello, which emulated OpenSSL could not meet while it parsed the 146-certificate bundle for each connection. The guest therefore points OpenSSL at the hashed certificate directory (`SSL_CERT_FILE`, `SSL_CERT_DIR`), and the launcher, whose libcurl names the bundle explicitly, runs with a small preload library (`desktop/fast-ca.c`) that substitutes the same directory lookup. Verification is unchanged; only the loading strategy differs. The launcher retries downloads that are still dropped.
 
 ## Verification
 
@@ -55,7 +69,8 @@ The path to accelerated guest OpenGL is VirGL: Mesa's `virgl` driver in the gues
 - libepoxy with an Emscripten backend (`gpu/patch-epoxy.py`) that resolves every GL and EGL entry point through Emscripten's WebGL 2 implementation;
 - `gpu/webgl-compat.c`: desktop-GL entry points reachable on GLES code paths (`glClearDepth`, `glDepthRange`, buffer read-mapping through `getBufferSubData`, query widening) and **virtual contexts** — a canvas has one WebGL context, while virglrenderer and QEMU expect one context per guest context, sharing objects but not state. Each virtual context keeps a shadow of the GLES 3.0 context state; switching applies only the differences;
 - virglrenderer's OpenGL renderer only (no EGL, GLX, GBM, DRM, Venus or video), with Mesa's utility code taught that Emscripten is a POSIX system;
-- QEMU's SDL OpenGL display using virtual contexts, rendering in QEMU's thread through OffscreenCanvas.
+- QEMU's SDL OpenGL display using virtual contexts, rendering in QEMU's thread through OffscreenCanvas. The window requests OpenGL ES 3.0 (SDL's default of ES 2.0 made Emscripten create a WebGL 1 context), BGRA uploads are converted to RGBA, GL errors stay with the virtual context that raised them, and fence waits never block (WebGL's maximum client wait is 0);
+- a main loop that returns to the browser about 60 times a second (through Asyncify): a worker's OffscreenCanvas is presented, and WebGL sync objects signal, only between tasks.
 
 Known WebGL 2 limits: no geometry or tessellation shaders, compute, texture buffers or texture swizzle. virglrenderer therefore offers the guest roughly OpenGL 3.1-level features; Minecraft's OpenGL 3.3 core context can be requested with Mesa's `MESA_GL_VERSION_OVERRIDE=3.3`, which works when the game does not use the missing features. Browser WebGPU does not provide a Vulkan driver to the guest.
 
