@@ -30,8 +30,9 @@ RUN cd linux && make x86_64_defconfig kvm_guest.config && \
 # The launcher's certificate shortcut (see fast-ca.c), built for the guest.
 FROM ${DEBIAN_IMAGE} AS fastca
 RUN apt-get update && apt-get install -y --no-install-recommends gcc libc6-dev && rm -rf /var/lib/apt/lists/*
-COPY desktop/fast-ca.c /src/fast-ca.c
-RUN mkdir /out && gcc -O2 -Wall -Werror -shared -fPIC -o /out/libbrowser-linux-fast-ca.so /src/fast-ca.c -ldl
+COPY desktop/fast-ca.c desktop/fast-ca-test.c /src/
+RUN mkdir /out && gcc -O2 -Wall -Werror -shared -fPIC -o /out/libbrowser-linux-fast-ca.so /src/fast-ca.c -ldl && \
+    gcc -O2 -Wall -Werror -o /out/fast-ca-test /src/fast-ca-test.c -ldl
 
 FROM ${DEBIAN_IMAGE} AS rootfs
 ENV DEBIAN_FRONTEND=noninteractive
@@ -55,6 +56,7 @@ RUN for group in sudo video input render audio tty; do getent group "$group" > /
     : > /etc/machine-id && mkdir -p /var/lib/dbus && rm -f /var/lib/dbus/machine-id && ln -s /etc/machine-id /var/lib/dbus/machine-id
 COPY desktop/rootfs/ /
 COPY --from=fastca /out/libbrowser-linux-fast-ca.so /usr/local/lib/browser-linux/
+COPY --from=fastca /out/fast-ca-test /tmp/fast-ca-test
 COPY desktop/make-icon.py /tmp/make-icon.py
 RUN chmod 755 /usr/local/sbin/browser-boot /usr/local/sbin/browser-desktop /usr/local/sbin/browser-exchange \
       /usr/local/sbin/browser-halt /usr/local/bin/browser-session /usr/local/bin/browser-welcome \
@@ -62,7 +64,7 @@ RUN chmod 755 /usr/local/sbin/browser-boot /usr/local/sbin/browser-desktop /usr/
     chmod 440 /etc/sudoers.d/browser-linux && visudo -cf /etc/sudoers.d/browser-linux && \
     cp /usr/share/ca-certificates/mozilla/ISRG_Root_X1.crt /etc/ssl/browser-linux-ca.pem && \
     test -s /etc/ssl/browser-linux-ca.pem && test -e /etc/ssl/certs/ca-certificates.crt && \
-    LD_PRELOAD=/usr/local/lib/browser-linux/libbrowser-linux-fast-ca.so curl --version > /dev/null && \
+    LD_PRELOAD=/usr/local/lib/browser-linux/libbrowser-linux-fast-ca.so /tmp/fast-ca-test && rm /tmp/fast-ca-test && \
     mkdir -p /usr/share/icons/browser-linux && python3 /tmp/make-icon.py /usr/share/icons/browser-linux/minecraft-launcher.png && \
     rm /tmp/make-icon.py && \
     test -f /usr/share/weston/terminal.png && \
