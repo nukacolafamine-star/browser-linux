@@ -28,6 +28,11 @@ patch("src/mesa/util/os_misc.c",
       "DETECT_OS_LINUX || DETECT_OS_CYGWIN || DETECT_OS_SOLARIS || DETECT_OS_HURD\n",
       "DETECT_OS_LINUX || DETECT_OS_CYGWIN || DETECT_OS_SOLARIS || DETECT_OS_HURD || defined(__EMSCRIPTEN__)\n",
       count=2)
+# DRM's uapi header treats every non-Linux system as BSD; Emscripten provides
+# the same _IO* macros in <sys/ioctl.h> rather than <sys/ioccom.h>.
+patch("src/drm/drm-uapi/drm.h",
+      "#include <sys/ioccom.h>\n",
+      "#ifdef __EMSCRIPTEN__\n#include <sys/ioctl.h>\n#else\n#include <sys/ioccom.h>\n#endif\n")
 # Emscripten's headers trigger pedantic diagnostics unrelated to this code.
 patch("meson.build", "   '-Werror=pedantic',\n", "")
 print("patched virglrenderer for Emscripten")

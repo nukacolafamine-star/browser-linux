@@ -76,7 +76,7 @@ const manifest = {
   schema: 2, name: 'Debian 13 desktop', architecture: 'x86_64', build,
   description: `Debian 13 with the Weston Wayland desktop, Xwayland for X11 programs, apt, and Linux ${guest.kernel}. `
     + 'Programs run on an emulated x86-64 processor with CPU-rendered graphics. The official Minecraft Launcher can be installed from Mojang inside Linux.',
-  engine: {maximumMemoryMiB: memory.maximumMiB || 4096},
+  engine: {maximumMemoryBytes: memory.maximumBytes || null},
   guest,
   files: files.map(file => ({...file, name: prefix + file.name})),
   disk: {name: prefix + 'disk/disk.json', bytes: diskJsonBytes.length, sha256: diskSha, size: diskManifest.size,

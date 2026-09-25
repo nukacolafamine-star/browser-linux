@@ -257,9 +257,11 @@ async function boot() {
   patchTerminal(engine, slave);
 
   const append = ['console=ttyS0', 'root=/dev/vda', 'rw', 'rootfstype=ext4', 'quiet', 'loglevel=3'];
+  // The WebAssembly JIT is initialized only by multi-threaded TCG's vCPU
+  // threads, so thread=multi is required even with one virtual processor.
   const args = [
     '-M', 'pc,i8042=off', '-cpu', 'max', '-m', memory + 'M', '-smp', String(cpus),
-    '-accel', `tcg,thread=${cpus > 1 ? 'multi' : 'single'},tb-size=${tbMiB}`, '-nodefaults', '-no-reboot',
+    '-accel', `tcg,thread=multi,tb-size=${tbMiB}`, '-nodefaults', '-no-reboot',
     '-L', '/pack', '-kernel', '/pack/bzImage', '-append', append.join(' '),
     '-blockdev', `driver=nbd,node-name=root,server.type=inet,server.host=${DISK_ENDPOINT.host},server.port=${DISK_ENDPOINT.port},export=root,discard=unmap`,
     '-device', 'virtio-blk-pci,drive=root',

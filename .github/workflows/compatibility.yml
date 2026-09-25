@@ -68,7 +68,7 @@ jobs:
             QEMU_REPO_VERSION=8604ed49a3cde392890b014a8d5a959c8a2fe72a
             EMSDK_VERSION_QEMU=4.0.10
             WASM_INITIAL_MEMORY_MIB=256
-            WASM_MAXIMUM_MEMORY_MIB=4096
+            WASM_MAXIMUM_MEMORY_PAGES=65535
           cache-from: |
             type=gha,scope=browser-linux-qemu-dependencies
             type=gha,scope=browser-linux-qemu-proof
@@ -109,7 +109,7 @@ jobs:
             QEMU_REPO_VERSION=8604ed49a3cde392890b014a8d5a959c8a2fe72a
             EMSDK_VERSION_QEMU=4.0.10
             WASM_INITIAL_MEMORY_MIB=256
-            WASM_MAXIMUM_MEMORY_MIB=4096
+            WASM_MAXIMUM_MEMORY_PAGES=65535
           cache-from: |
             type=gha,scope=browser-linux-qemu-dependencies
             type=gha,scope=browser-linux-qemu-proof
