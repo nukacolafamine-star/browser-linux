@@ -16,13 +16,20 @@ printf 'Rendering: Weston Pixman on virtual DRM; guest GPU acceleration unavaila
 
 # Virtio modules belong to this guest kernel. They do not touch the host OS.
 modprobe virtio_gpu || true
+modprobe virtio_rng || true
 modprobe evdev || true
 modprobe usbhid || true
 modprobe i8042 || true
 modprobe atkbd || true
 modprobe psmouse || true
 /sbin/udevd --daemon
-udevadm trigger --action=add
+# Only desktop devices need udev properties. Triggering every virtual PCI/ACPI
+# device also loads unused storage and nested-virtualization drivers, which is
+# costly under instruction translation. These input properties are still real
+# udev rules and must pass the independent graphical-input acceptance test.
+udevadm trigger --action=add --subsystem-match=drm
+udevadm trigger --action=add --subsystem-match=input
+udevadm trigger --action=add --subsystem-match=hidraw
 udevadm settle --timeout=20 || true
 /usr/local/sbin/browser-exchange > /var/log/browser-exchange.log 2>&1 &
 
