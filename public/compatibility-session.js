@@ -316,6 +316,11 @@ function withCrashStacks(bytes) {
   patch('      __emscripten_thread_crashed();\n      throw ex;', "      err('Emulator thread crashed: ' + (ex?.stack || ex));\n      __emscripten_thread_crashed();\n      throw ex;");
   patch('  } catch (e) {}\n};', "  } catch (e) { err('WebAssembly memory could not grow to ' + size + ' bytes: ' + e); }\n};");
   patch('    updateMemoryViews();\n    return 1;', "    updateMemoryViews();\n    err('WebAssembly memory grew to ' + (size / 1048576).toFixed(0) + ' MiB');\n    return 1;");
+  // GPU runtime: where the GL layer itself records an error (WebGL reports
+  // its own errors in the console).
+  if (text.includes('  recordError: errorCode => {\n    if (!GL.lastError) {'))
+    patch('  recordError: errorCode => {\n    if (!GL.lastError) {',
+      "  recordError: errorCode => {\n    if ((GL.errorReports = (GL.errorReports || 0) + 1) <= 20) err('GL error ' + errorCode + ' recorded at ' + new Error().stack);\n    if (!GL.lastError) {");
   // Translation blocks compiled to WebAssembly modules, per emulator thread.
   const jitStats = "(Module.__jitStats ??= {made: 0, removed: 0, collected: 0})";
   const jitReport = "err('JIT thread ' + Module.__wasm32_tb.cur_core_num + ': ' + JSON.stringify(Module.__jitStats))";

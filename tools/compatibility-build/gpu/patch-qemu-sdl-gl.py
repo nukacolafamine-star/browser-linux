@@ -85,6 +85,21 @@ replace("""    assert(scon->opengl);
 path.write_text(source)
 print(f"patched QEMU SDL OpenGL display for virtual contexts ({sites} window switches)")
 
+# The window's context is the one real WebGL context. SDL defaults to OpenGL
+# ES 2.0, which Emscripten creates as WebGL 1; virglrenderer needs ES 3.0.
+path = pathlib.Path(sys.argv[1]) / "ui" / "sdl2.c"
+source = path.read_text()
+replace("""        scon->winctx = SDL_GL_CreateContext(scon->real_window);
+""", """#ifdef __EMSCRIPTEN__
+        SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
+        SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
+        SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
+#endif
+        scon->winctx = SDL_GL_CreateContext(scon->real_window);
+""")
+path.write_text(source)
+print("QEMU's SDL window now requests OpenGL ES 3.0 (WebGL 2)")
+
 # The display renders with WebGL in QEMU's main loop thread. A browser
 # presents a worker's OffscreenCanvas, and signals WebGL sync objects (the
 # guest's GPU fences), only between tasks, so the main loop must return to the
