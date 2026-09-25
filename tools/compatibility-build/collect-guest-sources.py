@@ -53,17 +53,20 @@ def collect(installed, versions, output):
     output.mkdir(parents=True)
     shutil.copy2(installed, output / 'apk-installed.txt')
     shutil.copy2(versions, output / 'package-versions.txt')
-    repository = Path('/aports')
-    run('git', 'init', str(repository))
-    # Official Alpine GitHub mirror; exact commits, never the current branch tip.
-    run('git', '-C', str(repository), 'remote', 'add', 'origin', 'https://github.com/alpinelinux/aports.git')
     groups = {}
     for package in packages:
         groups.setdefault((package['origin'], package['version'], package['commit']), []).append(package['name'])
     fetched = set()
     origins = []
     for (origin, version, commit), names in sorted(groups.items()):
+        # Keep shallow/promisor metadata separate per commit. Fetching many
+        # unrelated historical roots into one partial clone can race Git's lazy
+        # object fetch and fail with "shallow file has changed since we read it".
+        repository = Path('/aports') / commit
         if commit not in fetched:
+            repository.mkdir(parents=True)
+            run('git', 'init', str(repository))
+            run('git', '-C', str(repository), 'remote', 'add', 'origin', 'https://github.com/alpinelinux/aports.git')
             run('git', '-C', str(repository), 'fetch', '--depth=1', '--filter=blob:none', 'origin', commit)
             fetched.add(commit)
         candidates = [f'{repo}/{origin}' for repo in ('main', 'community', 'testing')]
