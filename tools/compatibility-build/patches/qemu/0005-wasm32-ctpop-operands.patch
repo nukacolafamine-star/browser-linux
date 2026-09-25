@@ -1,0 +1,27 @@
+diff --git a/tcg/wasm32/tcg-target.c.inc b/tcg/wasm32/tcg-target.c.inc
+index 3c85588..f6cfa95 100644
+--- a/tcg/wasm32/tcg-target.c.inc
++++ b/tcg/wasm32/tcg-target.c.inc
+@@ -1501,6 +1501,8 @@ static void tcg_wasm_out_ctpop_i32(TCGContext *s, TCGReg dest, TCGReg src)
+     tcg_wasm_out_op_global_get_r(s, src);
+     tcg_wasm_out_op_i32_wrap_i64(s);
+     tcg_wasm_out_op_i32_popcnt(s);
++    /* Registers are i64 globals. */
++    tcg_wasm_out_op_i64_extend_i32_u(s);
+     tcg_wasm_out_op_global_set_r(s, dest);
+ }
+ 
+@@ -3688,10 +3690,11 @@ static void tcg_out_op(TCGContext *s, TCGOpcode opc,
+         tcg_out_not(s, opc, args[0], args[1]);
+         break;
+     case INDEX_op_ctpop_i32:
+-        tcg_out_ctpop_i32(s, opc, args[1], args[2]);
++        /* One output and one input: args[0] = dest, args[1] = src. */
++        tcg_out_ctpop_i32(s, opc, args[0], args[1]);
+         break;
+     case INDEX_op_ctpop_i64:
+-        tcg_out_ctpop_i64(s, opc, args[1], args[2]);
++        tcg_out_ctpop_i64(s, opc, args[0], args[1]);
+         break;
+     case INDEX_op_add2_i32:
+     case INDEX_op_add2_i64:

@@ -193,8 +193,12 @@ async function boot() {
     if (file.guestPath && !/^\/pack\/[a-zA-Z0-9_.-]+$/.test(file.guestPath)) throw new Error('Invalid guest file path');
   }
   report.build = manifest.build;
+  // The experimental GPU runtime renders guest OpenGL (VirGL) with WebGL 2.
+  const gpu = options.get('gpu') === '1' && manifest.files.some(file => file.variant === 'gpu');
+  report.gpu = gpu;
   const byRole = role => {
-    const entries = manifest.files.filter(file => file.role === role);
+    let entries = manifest.files.filter(file => file.role === role);
+    if (entries.length > 1) entries = entries.filter(file => (file.variant || 'cpu') === (gpu ? 'gpu' : 'cpu'));
     if (entries.length !== 1) throw new Error('Invalid image manifest: ' + role);
     return entries[0];
   };
@@ -244,7 +248,9 @@ async function boot() {
     print: log, printErr: log, onAbort: message => fail(new Error(String(message))),
     onExit: code => {exited(code);},
     preRun: [module => {
-      module.ENV.SDL_RENDER_DRIVER = 'software';
+      // The CPU runtime presents frames with Canvas2D on the page's thread;
+      // the GPU runtime owns the canvas (OffscreenCanvas) in QEMU's thread.
+      if (!gpu) module.ENV.SDL_RENDER_DRIVER = 'software';
       module.ENV.SDL_EMSCRIPTEN_KEYBOARD_ELEMENT = '#canvas';
       if (inputTrace) module.ENV.SDL_EVENT_LOGGING = '1';
       module.FS.mkdir('/pack');
@@ -256,11 +262,20 @@ async function boot() {
   window.guestEngine = engine;
   patchTerminal(engine, slave);
 
-  const append = ['console=ttyS0', 'root=/dev/vda', 'rw', 'rootfstype=ext4', 'quiet', 'loglevel=3'];
+  // Development diagnostics: another CPU model, and the full kernel log.
+  const cpuModel = options.get('cpu') || 'Westmere';
+  if (!/^[A-Za-z0-9_.,=+-]{1,120}$/.test(cpuModel)) throw new Error('Unsupported CPU model');
+  const verbose = options.get('verbose') === '1';
+  report.cpuModel = cpuModel;
+  const append = ['console=ttyS0', 'root=/dev/vda', 'rw', 'rootfstype=ext4', ...(verbose ? ['loglevel=7'] : ['quiet', 'loglevel=3']),
+    ...(gpu ? ['browser.renderer=gl'] : [])];
+  const display = gpu
+    ? ['-vga', 'none', '-device', 'virtio-vga-gl,xres=1280,yres=720', '-display', 'sdl,gl=es']
+    : ['-vga', 'none', '-device', 'virtio-vga,xres=1280,yres=720', '-display', 'sdl,gl=off'];
   // The WebAssembly JIT is initialized only by multi-threaded TCG's vCPU
   // threads, so thread=multi is required even with one virtual processor.
   const args = [
-    '-M', 'pc,i8042=off', '-cpu', 'max', '-m', memory + 'M', '-smp', String(cpus),
+    '-M', 'pc,i8042=off', '-cpu', cpuModel, '-m', memory + 'M', '-smp', String(cpus),
     '-accel', `tcg,thread=multi,tb-size=${tbMiB}`, '-nodefaults', '-no-reboot',
     '-L', '/pack', '-kernel', '/pack/bzImage', '-append', append.join(' '),
     '-blockdev', `driver=nbd,node-name=root,server.type=inet,server.host=${DISK_ENDPOINT.host},server.port=${DISK_ENDPOINT.port},export=root,discard=unmap`,
@@ -268,7 +283,7 @@ async function boot() {
     ...(networkURL ? ['-netdev', `socket,id=net0,connect=${NETWORK_ENDPOINT.host}:${NETWORK_ENDPOINT.port}`,
       '-device', 'virtio-net-pci,netdev=net0,mac=52:54:00:12:34:56'] : []),
     '-serial', 'stdio', '-monitor', 'none', '-parallel', 'none',
-    '-vga', 'none', '-device', 'virtio-vga,xres=1280,yres=720', '-display', 'sdl,gl=off',
+    ...display,
     '-device', 'virtio-keyboard-pci', '-device', 'virtio-tablet-pci', '-device', 'virtio-mouse-pci,id=gamemouse',
     '-chardev', `socket,id=monitor,host=${MONITOR_ENDPOINT.host},port=${MONITOR_ENDPOINT.port},server=off`,
     '-mon', 'chardev=monitor,mode=control',

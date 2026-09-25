@@ -67,7 +67,7 @@ export class QmpClient {
 // Relative mouse input for games: while the canvas holds pointer lock,
 // movement goes to a separate virtio mouse as relative motion, the way
 // games expect, instead of the absolute tablet used for the desktop.
-export function connectGameMouse(canvas, qmp, {device = 'gamemouse', onChange = () => {}} = {}) {
+export function connectGameMouse(canvas, qmp, {onChange = () => {}} = {}) {
   let dx = 0, dy = 0, scheduled = false, active = false;
   const flush = () => {
     scheduled = false;
@@ -76,7 +76,7 @@ export function connectGameMouse(canvas, qmp, {device = 'gamemouse', onChange = 
     if (dx) events.push({type: 'rel', data: {axis: 'x', value: Math.round(dx)}});
     if (dy) events.push({type: 'rel', data: {axis: 'y', value: Math.round(dy)}});
     dx = dy = 0;
-    qmp.execute('input-send-event', {device, events}).catch(() => {});
+    qmp.execute('input-send-event', {events}).catch(() => {});
   };
   const move = event => {
     if (!active) return;
@@ -88,13 +88,13 @@ export function connectGameMouse(canvas, qmp, {device = 'gamemouse', onChange = 
     const name = ['left', 'middle', 'right'][event.button];
     if (!name) return;
     event.preventDefault(); event.stopImmediatePropagation();
-    qmp.execute('input-send-event', {device, events: [{type: 'btn', data: {button: name, down}}]}).catch(() => {});
+    qmp.execute('input-send-event', {events: [{type: 'btn', data: {button: name, down}}]}).catch(() => {});
   };
   const wheel = event => {
     if (!active) return;
     event.preventDefault(); event.stopImmediatePropagation();
     const name = event.deltaY < 0 ? 'wheel-up' : 'wheel-down';
-    qmp.execute('input-send-event', {device, events: [{type: 'btn', data: {button: name, down: true}}, {type: 'btn', data: {button: name, down: false}}]}).catch(() => {});
+    qmp.execute('input-send-event', {events: [{type: 'btn', data: {button: name, down: true}}, {type: 'btn', data: {button: name, down: false}}]}).catch(() => {});
   };
   const lockChange = () => {
     active = document.pointerLockElement === canvas;

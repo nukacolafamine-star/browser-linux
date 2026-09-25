@@ -32,7 +32,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y --no-install-recommends \
       sysvinit-core sysvinit-utils udev kmod dbus dbus-bin seatd \
       weston xwayland foot \
-      libgl1-mesa-dri libegl-mesa0 libglx-mesa0 libgl1 libegl1 libgles2 mesa-utils mesa-vulkan-drivers \
+      libgl1-mesa-dri libegl-mesa0 libglx-mesa0 libgl1 libopengl0 libegl1 libgles2 mesa-utils mesa-vulkan-drivers \
       fonts-dejavu-core fontconfig adwaita-icon-theme hicolor-icon-theme gsettings-desktop-schemas \
       ca-certificates curl wget iproute2 iputils-ping netbase \
       procps psmisc less nano sudo file xz-utils unzip zip bzip2 python3 \

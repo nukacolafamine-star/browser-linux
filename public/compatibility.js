@@ -24,7 +24,8 @@ async function prepareIsolation() {
 function availability() {
   $('start-compatibility').disabled = !!frame || !capabilities?.compatibilityEngine || !manifest
     || typeof DecompressionStream !== 'function' || !capabilities?.storage.opfsAPI;
-  for (const id of ['guest-memory', 'guest-cpus', 'disk-mode', 'guest-network']) $(id).disabled = !!frame;
+  for (const id of ['guest-memory', 'guest-cpus', 'disk-mode', 'guest-network', 'guest-gpu']) $(id).disabled = !!frame;
+  $('gpu-option').hidden = !(manifest?.engine?.gpuVariant && capabilities?.graphics.webgl2);
   $('guest-network').disabled = !!frame || !relay;
 }
 
@@ -112,6 +113,7 @@ $('start-compatibility').onclick = () => {
   frame.allow = 'cross-origin-isolated; fullscreen';
   const params = new URLSearchParams({memory: $('guest-memory').value, cpus: $('guest-cpus').value,
     disk: $('disk-mode').value, network: $('guest-network').checked ? 'on' : 'off'});
+  if ($('guest-gpu').checked && !$('gpu-option').hidden) params.set('gpu', '1');
   if (new URLSearchParams(location.search).get('input-trace') === '1') params.set('input-trace', '1');
   frame.src = 'compatibility-session.html?' + params;
   $('session-container').append(frame);

@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: GPL-2.0-only
 // Assemble successful isolated CI artifacts into a versioned, verified build
 // under public/compatibility/. Never manufactures a passing test.
-//   node tools/compatibility-build/assemble.mjs RUNTIME_ARTIFACT DESKTOP_ARTIFACT [--move-chunks]
+//   node tools/compatibility-build/assemble.mjs RUNTIME_ARTIFACT DESKTOP_ARTIFACT
+//     [--gpu-runtime=GPU_RUNTIME_ARTIFACT] [--move-chunks] [--chunks-from=DIR]
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
@@ -10,6 +11,9 @@ import {createHash} from 'node:crypto';
 const project = fileURLToPath(new URL('../../', import.meta.url));
 const args = process.argv.slice(2);
 const moveChunks = args.includes('--move-chunks');
+const option = name => args.find(arg => arg.startsWith(name + '='))?.slice(name.length + 1);
+const gpuRuntime = option('--gpu-runtime') && path.resolve(option('--gpu-runtime'));
+const chunksFrom = option('--chunks-from') && path.resolve(option('--chunks-from'));
 const [runtimeArg, desktopArg] = args.filter(arg => !arg.startsWith('--'));
 if (!runtimeArg || !desktopArg) throw new Error('Usage: node tools/compatibility-build/assemble.mjs RUNTIME_ARTIFACT DESKTOP_ARTIFACT [--move-chunks]');
 const runtime = path.resolve(runtimeArg), desktop = path.resolve(desktopArg);
@@ -18,11 +22,11 @@ const staging = path.join(destination, 'builds', '.staging-' + Date.now());
 const hash = bytes => createHash('sha256').update(bytes).digest('hex');
 const files = [];
 
-async function add(input, name, role, guestPath) {
+async function add(input, name, role, guestPath, variant) {
   const bytes = await fs.readFile(input);
   await fs.mkdir(path.dirname(path.join(staging, name)), {recursive: true});
   await fs.writeFile(path.join(staging, name), bytes);
-  files.push({name, role, bytes: bytes.length, sha256: hash(bytes), ...(guestPath ? {guestPath} : {})});
+  files.push({name, role, bytes: bytes.length, sha256: hash(bytes), ...(guestPath ? {guestPath} : {}), ...(variant ? {variant} : {})});
 }
 
 // Verify the guest artifact's own checksum list before using it.
@@ -38,6 +42,12 @@ await fs.mkdir(staging, {recursive: true});
 await add(path.join(runtime, 'runtime/qemu-system-x86_64.js'), 'runtime/qemu-system-x86_64.js', 'script');
 await add(path.join(runtime, 'runtime/qemu-system-x86_64.wasm'), 'runtime/qemu-system-x86_64.wasm', 'wasm');
 await add(path.join(runtime, 'runtime/vendor/xterm-pty.js'), 'runtime/vendor/xterm-pty.js', 'pty');
+if (gpuRuntime) {
+  // Experimental: virtio-gpu with VirGL rendered through WebGL 2.
+  await add(path.join(gpuRuntime, 'runtime/qemu-system-x86_64.js'), 'runtime-gpu/qemu-system-x86_64.js', 'script', undefined, 'gpu');
+  await add(path.join(gpuRuntime, 'runtime/qemu-system-x86_64.wasm'), 'runtime-gpu/qemu-system-x86_64.wasm', 'wasm', undefined, 'gpu');
+  await add(path.join(gpuRuntime, 'runtime/vendor/xterm-pty.js'), 'runtime-gpu/vendor/xterm-pty.js', 'pty', undefined, 'gpu');
+}
 for (const name of ['bios-256k.bin', 'vgabios-virtio.bin', 'kvmvapic.bin', 'linuxboot_dma.bin', 'efi-virtio.rom']) {
   await add(path.join(runtime, 'pack', name), 'pack/' + name, 'rom', '/pack/' + name);
 }
@@ -53,7 +63,10 @@ let downloadBytes = 0;
 for (const [, digest, bytes] of diskManifest.chunks) {
   if (seen.has(digest)) continue;
   seen.add(digest);
-  const source = path.join(desktop, 'disk/chunks', digest + '.gz'), target = path.join(staging, 'disk/chunks', digest + '.gz');
+  let source = path.join(desktop, 'disk/chunks', digest + '.gz');
+  const target = path.join(staging, 'disk/chunks', digest + '.gz');
+  const missing = await fs.access(source).then(() => false, () => true);
+  if (missing && chunksFrom) source = path.join(chunksFrom, digest + '.gz');
   const stat = await fs.stat(source);
   if (stat.size !== bytes) throw new Error('Disk chunk has the wrong size: ' + digest);
   if (moveChunks) await fs.rename(source, target); else await fs.copyFile(source, target);
@@ -76,7 +89,7 @@ const manifest = {
   schema: 2, name: 'Debian 13 desktop', architecture: 'x86_64', build,
   description: `Debian 13 with the Weston Wayland desktop, Xwayland for X11 programs, apt, and Linux ${guest.kernel}. `
     + 'Programs run on an emulated x86-64 processor with CPU-rendered graphics. The official Minecraft Launcher can be installed from Mojang inside Linux.',
-  engine: {maximumMemoryBytes: memory.maximumBytes || null},
+  engine: {maximumMemoryBytes: memory.maximumBytes || null, gpuVariant: !!gpuRuntime},
   guest,
   files: files.map(file => ({...file, name: prefix + file.name})),
   disk: {name: prefix + 'disk/disk.json', bytes: diskJsonBytes.length, sha256: diskSha, size: diskManifest.size,

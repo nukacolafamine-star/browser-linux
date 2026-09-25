@@ -120,7 +120,7 @@ USER_ENV = "runuser -u user -- env HOME=/home/user XDG_RUNTIME_DIR=/run/user/100
 try:
     image = rebuild_disk()
     report["checks"].append("Published chunks verified by SHA-256 and reassembled into the disk image")
-    argv = ["qemu-system-x86_64", "-M", "pc,i8042=off", "-cpu", "max", "-m", "2048M", "-smp", "2",
+    argv = ["qemu-system-x86_64", "-M", "pc,i8042=off", "-cpu", "Westmere", "-m", "2048M", "-smp", "2",
             "-accel", "tcg,thread=multi", "-nodefaults", "-no-reboot",
             "-kernel", str(artifact / "bzImage"),
             "-append", "console=ttyS0 root=/dev/vda rw rootfstype=ext4 quiet loglevel=3",
@@ -217,12 +217,19 @@ try:
                 if any(w >= 600 and h >= 400 for w, h in sizes):
                     launcher["opened"] = True
                     break
+                if launcher.get("firstWindowSeconds") and "LAUNCHER_ALIVE" not in run(
+                        "pgrep -u user -f 'minecraft-launcher' > /dev/null && echo LAUNCHER_ALIVE", "ALIVE"):
+                    launcher["exited"] = True
+                    break
                 time.sleep(15)
             launcher["windows"] = windows
             launcher["windowSeconds"] = round(time.monotonic() - launch_started, 3)
             time.sleep(20)  # let the web view paint before the screenshot
             launcher["screen"] = screendump("launcher.ppm")
             launcher["log"] = run("tail -n 40 /tmp/minecraft-launcher.log; ls -la /home/user/.minecraft /home/user/.minecraft/launcher 2>&1 | head -n 40; tail -n 30 /home/user/.minecraft/launcher_log.txt 2>/dev/null", "LAUNCHLOG")[-8000:]
+            missing = run("for f in /home/user/.minecraft/launcher/minecraft-launcher /home/user/.minecraft/launcher/*.so; do "
+                          "ldd \"$f\" 2>/dev/null | grep 'not found' | sed \"s|^|$(basename $f): |\"; done", "LDD", 120)
+            launcher["missingLibraries"] = sorted(set(re.findall(r"^\S+: \s*(\S+) => not found", missing, re.M)))
             launcher["opened"] = launcher.get("opened", False)
             if launcher.get("firstWindowSeconds"):
                 report["checks"].append(f"Official Minecraft Launcher bootstrap downloaded from Mojang and opened its updater in {launcher['firstWindowSeconds']}s")
