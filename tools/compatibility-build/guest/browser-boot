@@ -1,0 +1,31 @@
+#!/bin/sh
+set -eu
+mountpoint -q /proc || mount -t proc proc /proc
+mountpoint -q /sys || mount -t sysfs sysfs /sys
+mountpoint -q /dev || mount -t devtmpfs devtmpfs /dev
+mkdir -p /dev/pts /run /tmp /var/log
+mountpoint -q /dev/pts || mount -t devpts devpts /dev/pts
+mountpoint -q /run || mount -t tmpfs -o mode=755 tmpfs /run
+chmod 1777 /tmp
+hostname browser-linux-wayland
+printf '\nBROWSER_LINUX_GUEST_BOOT arch=%s kernel=%s\n' "$(uname -m)" "$(uname -r)"
+printf 'Rendering: Weston Pixman on virtual DRM; guest GPU acceleration unavailable.\n'
+
+# Virtio modules belong to this guest kernel. They do not touch the host OS.
+modprobe virtio_gpu || true
+modprobe evdev || true
+modprobe usbhid || true
+modprobe i8042 || true
+modprobe atkbd || true
+modprobe psmouse || true
+/sbin/udevd --daemon
+udevadm trigger --action=add
+udevadm settle --timeout=20 || true
+
+# Keep serial usable even if a graphics prerequisite is missing.
+case " $(cat /proc/cmdline) " in
+  *' browser.graphics=off '*) printf 'BROWSER_LINUX_GRAPHICS_DISABLED\n' ;;
+  *) /usr/local/sbin/browser-weston > /var/log/browser-weston.log 2>&1 & ;;
+esac
+cat /etc/motd
+printf 'BROWSER_LINUX_SERIAL_READY\n'

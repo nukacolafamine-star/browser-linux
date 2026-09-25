@@ -1,0 +1,4 @@
+::sysinit:/usr/local/sbin/browser-boot
+ttyS0::respawn:/bin/ash -l
+::ctrlaltdel:/sbin/reboot
+::shutdown:/bin/umount -a -r

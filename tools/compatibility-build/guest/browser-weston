@@ -1,0 +1,58 @@
+#!/bin/sh
+set -eu
+export XDG_RUNTIME_DIR=/run/user/0
+export WAYLAND_DISPLAY=wayland-0
+mkdir -p "$XDG_RUNTIME_DIR"
+chmod 700 "$XDG_RUNTIME_DIR"
+export SEATD_SOCK=/run/seatd.sock
+export LIBSEAT_BACKEND=seatd
+
+if [ ! -e /dev/dri/card0 ]; then
+  printf 'BROWSER_LINUX_GRAPHICS_FAILED: no virtual DRM card\n' > /dev/ttyS0
+  exit 1
+fi
+
+# The emulated serial console owns the login session, so no physical VT is used.
+SEATD_VTBOUND=0 seatd -g root -s "$SEATD_SOCK" > /var/log/seatd.log 2>&1 &
+seatd_pid=$!
+cleanup() { kill "$seatd_pid" 2>/dev/null || true; }
+trap cleanup EXIT HUP INT TERM
+i=0
+while [ ! -S "$SEATD_SOCK" ]; do
+  kill -0 "$seatd_pid" 2>/dev/null || exit 1
+  i=$((i + 1))
+  [ "$i" -lt 100 ] || exit 1
+  sleep 0.1
+done
+
+weston --backend=drm --renderer=pixman --shell=desktop-shell.so \
+  --socket="$WAYLAND_DISPLAY" --config=/etc/xdg/weston/weston.ini \
+  --idle-time=0 --continue-without-input --log=/var/log/weston.log &
+weston_pid=$!
+i=0
+while [ ! -S "$XDG_RUNTIME_DIR/$WAYLAND_DISPLAY" ]; do
+  if ! kill -0 "$weston_pid" 2>/dev/null; then
+    printf 'BROWSER_LINUX_GRAPHICS_FAILED: Weston exited; see /var/log/weston.log\n' > /dev/ttyS0
+    cat /var/log/weston.log > /dev/ttyS0
+    exit 1
+  fi
+  i=$((i + 1))
+  if [ "$i" -ge 240 ]; then
+    printf 'BROWSER_LINUX_GRAPHICS_FAILED: Weston socket timeout\n' > /dev/ttyS0
+    kill "$weston_pid" 2>/dev/null || true
+    exit 1
+  fi
+  sleep 0.5
+done
+printf 'BROWSER_LINUX_WAYLAND_READY compositor_pid=%s socket=%s renderer=pixman\n' \
+  "$weston_pid" "$XDG_RUNTIME_DIR/$WAYLAND_DISPLAY" > /dev/ttyS0
+weston-terminal > /var/log/weston-terminal.log 2>&1 &
+terminal_pid=$!
+sleep 1
+if kill -0 "$terminal_pid" 2>/dev/null; then
+  printf 'BROWSER_LINUX_WAYLAND_CLIENT_STARTED terminal_pid=%s\n' "$terminal_pid" > /dev/ttyS0
+else
+  printf 'BROWSER_LINUX_WAYLAND_CLIENT_FAILED\n' > /dev/ttyS0
+  cat /var/log/weston-terminal.log > /dev/ttyS0
+fi
+wait "$weston_pid"
