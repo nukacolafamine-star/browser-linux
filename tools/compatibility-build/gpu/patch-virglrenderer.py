@@ -35,4 +35,9 @@ patch("src/drm/drm-uapi/drm.h",
       "#ifdef __EMSCRIPTEN__\n#include <sys/ioctl.h>\n#else\n#include <sys/ioccom.h>\n#endif\n")
 # Emscripten's headers trigger pedantic diagnostics unrelated to this code.
 patch("meson.build", "   '-Werror=pedantic',\n", "")
+# QEMU links the library directly; the standalone vtest server is a separate
+# program that would need its own WebGL 2 link settings.
+patch("meson.build",
+      "if with_vrend and not with_host_windows\n   subdir('vtest')\n",
+      "if with_vrend and not with_host_windows and host_machine.system() != 'emscripten'\n   subdir('vtest')\n")
 print("patched virglrenderer for Emscripten")
