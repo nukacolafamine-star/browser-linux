@@ -11,6 +11,10 @@ ARG WASM_MAXIMUM_MEMORY_PAGES=65535
 # instead of discarding them (lost key releases caused stuck, repeating keys),
 # block briefly instead of spinning when the main loop is idle, and treat
 # pointers above 2 GiB as unsigned in the JIT's JavaScript glue.
+# Emscripten 4.0.10's socket recvmsg() misplaced scatter/gather data, which
+# corrupted disk reads that QEMU's NBD client splits across guest pages.
+COPY patch-emscripten.py /tmp/patch-emscripten.py
+RUN python3 /tmp/patch-emscripten.py /emsdk/upstream/emscripten
 COPY patches/qemu/ /tmp/qemu-patches/
 RUN cd /qemu && for patch in /tmp/qemu-patches/*.patch; do \
       git apply --check "$patch" && git apply "$patch" && echo "applied $patch" || exit 1; \
