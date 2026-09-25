@@ -15,7 +15,8 @@ The pinned artifact revision is `855319c0fed3b98e23979e364a1d6270322d3975` on th
 
 ## What this project changes
 
-- Removes only `.debug_*` custom sections from the prebuilt kernel; retains the original for inspection.
+- Removes `.debug_*` custom sections from the prebuilt kernel; retains the original for inspection.
+- Version 0.1.1 replaces twenty-seven ordinary 32-bit loads with atomic loads in four kernel ticket-spinlock functions, `wait_task_inactive` and `kcpustat_cpu_fetch`. The guarded transformation checks the exact input and function hashes, preserves all other code/data and is reproduced by `tools/kernel-fix.mjs`. This corrects startup and uptime-query stalls reproduced in WebKit; it is not a general replacement for reviewing the port's concurrency model.
 - Adds a Linux guest bridge, init/profile configuration, workspace and standard null/zero/full/tty device nodes to the initramfs.
 - Extends the host runtime with RPC, memory selection, shutdown and error handling, and replaces an input-buffer operation for broader browser compatibility.
 - Backports the upstream `d94d6b5` task-release race correction into the older runtime.
@@ -25,7 +26,7 @@ Linux C sources and BusyBox sources were **not recompiled in this task**. Byte-f
 
 ## Repack this application
 
-With existing Node 22 and project dependencies installed, `npm run build` uses only files in the project and writes generated assets under `public/`. It compiles our bridge with WABT, repacks the CPIO filesystem, strips kernel debug metadata, copies pinned xterm assets and regenerates the offline cache manifest. `public/asset-manifest.json` records SHA-256 hashes of served assets.
+With existing Node 22 and project dependencies installed, `npm run build` uses only files in the project and writes generated assets under `public/`. It compiles our bridge with WABT, repacks the CPIO filesystem, strips kernel debug metadata, applies the guarded spinlock correction, copies pinned xterm assets and regenerates the offline cache manifest. `public/asset-manifest.json` records SHA-256 hashes of served assets. The original prebuilt kernel is unchanged in `vendor/`; the correction is source-controlled separately from the archived upstream code.
 
 ## Separately rebuild Linux from source
 

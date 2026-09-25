@@ -8,7 +8,7 @@
 </head>
 <body>
   <header class="topbar">
-    <div class="brand"><img src="icon.svg" alt="" width="32" height="32"><div>Browser Linux <span class="release">EXPERIMENTAL · 0.1</span></div></div>
+    <div class="brand"><img src="icon.svg" alt="" width="32" height="32"><div>Browser Linux <span class="release">EXPERIMENTAL · 0.1.1</span></div></div>
     <div id="status" role="status" class="status">Starting Linux</div>
     <div class="top-actions"><button id="save-workspace" class="primary" disabled>Save workspace</button><button id="export-workspace" disabled>Export backup</button></div>
   </header>
@@ -25,11 +25,11 @@
     </aside>
     <main>
       <div id="startup-panel" class="startup-panel" role="status"><p class="eyebrow">BROWSER LINUX</p><h1>Preparing your workstation</h1><p id="startup-message">Checking what this browser can run.</p></div>
-      <div id="error-banner" class="error-banner" hidden><p id="error-message"></p><div class="button-row"><button id="retry">Restart Linux</button><button id="export-saved">Export last saved backup</button></div></div>
+      <div id="error-banner" class="error-banner" hidden><p id="error-message"></p><div class="button-row"><button id="retry">Restart Linux</button><button id="error-boot-details">Boot details</button><button id="export-saved">Export last saved backup</button></div></div>
       <section id="view-terminal" class="view active" aria-label="Linux terminal">
         <div class="view-heading"><div><p class="eyebrow">LINUX CONSOLE</p><h1>Your machine, in a tab.</h1></div><span class="architecture">wasm32 / Linux 6.4</span></div>
         <div class="terminal-panel"><div class="panel-toolbar"><span><span class="terminal-mark">&gt;_</span> root@browser-linux</span><div><button id="interrupt" title="Send Ctrl+C" disabled>Interrupt</button><button id="clear-terminal">Clear</button></div></div><div id="terminal"></div><div class="key-strip" aria-label="Terminal special keys"><button data-key="escape">Esc</button><button data-key="tab">Tab</button><button data-key="interrupt">Ctrl+C</button><button data-key="eof">Ctrl+D</button><button data-key="up">↑</button><button data-key="down">↓</button></div></div>
-        <div class="terminal-footer"><span>Commands run on this device.</span><button id="show-boot-log" class="text-button">Boot log</button></div>
+        <div class="terminal-footer"><span>Commands run on this device.</span><button id="show-boot-log" class="text-button">Boot details</button></div>
       </section>
       <section id="view-files" class="view" aria-label="Linux files">
         <div class="view-heading"><div><p class="eyebrow">LINUX FILESYSTEM</p><h1>Workspace</h1></div><button id="refresh-files" disabled>Refresh</button></div>
@@ -55,6 +55,6 @@
   </div>
   <div id="toast" role="status" hidden></div>
   <dialog id="prompt-dialog"><form method="dialog"><h2 id="prompt-title"></h2><p id="prompt-description"></p><label id="prompt-label" for="prompt-input">Name</label><input id="prompt-input" autocomplete="off"><div class="dialog-actions"><button value="cancel">Cancel</button><button id="prompt-confirm" value="ok" class="primary">Continue</button></div></form></dialog>
-  <dialog id="log-dialog"><div class="panel-toolbar"><h2>Boot log</h2><button id="close-log">Close</button></div><pre id="boot-log"></pre></dialog>
+  <dialog id="log-dialog" aria-labelledby="boot-details-title"><div class="panel-toolbar"><h2 id="boot-details-title">Boot details</h2><div class="button-row"><button id="copy-boot-report">Copy report</button><button id="close-log">Close</button></div></div><p id="boot-copy-status" role="status" hidden></p><pre id="boot-log" tabindex="0" aria-label="Startup report"></pre></dialog>
   <script src="assets/xterm.js"></script><script src="assets/addon-fit.js"></script><script src="runtime/linux.js"></script><script type="module" src="bootstrap.js"></script>
 </body></html>

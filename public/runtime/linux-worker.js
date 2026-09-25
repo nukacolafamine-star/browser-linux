@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0-only
+self.postMessage({method:'worker_status',phase:'script loaded'});
 importScripts('browser-agent.js');
 
 (function (console) {
@@ -254,6 +255,7 @@ importScripts('browser-agent.js');
   /// Callbacks from the main thread.
   const message_callbacks = {
     init: (message) => {
+      port.postMessage({method:'worker_status',phase:'initializing'});
       runner_name = message.runner_name;
       memory = message.memory;
       locks = message.locks;
@@ -311,10 +313,12 @@ importScripts('browser-agent.js');
         // An in-memory atomic flag ensures this only happens the first time vmlinux is instantiated on the main memory.
         return WebAssembly.instantiate(message.vmlinux, import_object).then((instance) => {
           vmlinux_instance = instance;
+          port.postMessage({method:'worker_status',phase:'kernel instantiated'});
         });
       };
 
       const vmlinux_run = () => {
+        port.postMessage({method:'worker_status',phase:'kernel entered'});
         if (message.runner_type == "primary_cpu") {
           // Notify the main thread about init task so that it knows where it resides in memory.
           port.postMessage({
@@ -445,6 +449,7 @@ importScripts('browser-agent.js');
             instance.exports.__set_tls_base(tls_base);
           }
           user_executable_instance = instance;
+          port.postMessage({method:'worker_status',phase:'userspace instantiated'});
           return instance;
         });
 

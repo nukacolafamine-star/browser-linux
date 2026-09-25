@@ -15,6 +15,8 @@ function fail(error){
   document.getElementById('error-message').textContent=error.message;
   document.getElementById('error-banner').hidden=false;
   document.getElementById('export-saved').hidden=true;
+  document.getElementById('error-boot-details').hidden=true;
+  document.getElementById('show-boot-log').hidden=true;
   document.getElementById('retry').textContent='Try again';
   document.getElementById('retry').onclick=()=>{sessionStorage.removeItem(reloadKey);location.reload();};
 }

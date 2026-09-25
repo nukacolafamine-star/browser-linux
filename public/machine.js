@@ -5,6 +5,7 @@ export class Machine extends EventTarget {
   constructor(){super();this.state='stopped';this.output='';this.logs=[];this.generation=0;this.saveQueue=Promise.resolve();}
   emit(name,detail){this.dispatchEvent(new CustomEvent(name,{detail}));}
   setState(state,detail=''){this.state=state;this.emit('state',{state,detail});}
+  diagnostics(){return {build:'0.1.1-startup',state:this.state,stage:this.bootStage,elapsedMs:Math.round((this.bootEnded??performance.now())-(this.bootStarted??performance.now())),browser:navigator.userAgent,processors:navigator.hardwareConcurrency,isolated:crossOriginIsolated,visibility:document.visibilityState,memoryMiB:this.memoryMiB,bridgeReady:this.bridgeReady,shellReady:this.shellReady,runtime:this.failedStats||this.os?.stats(),bootOutput:this.bootOutput||this.output,logs:this.logs.slice(-100)};}
   async claim(){
     if(this.claimed)return;
     if(!navigator.locks)throw new Error('This browser is missing workspace locking. Use an up-to-date browser.');
@@ -16,7 +17,8 @@ export class Machine extends EventTarget {
   async boot({memoryMiB=256,snapshot}={}){
     const generation=++this.generation;
     clearInterval(this.autoSave);this.os?.stop();this.os=null;this.output='';this.logs=[];
-    this.setState('booting','Checking browser');const start=performance.now();
+    this.bootStage='Checking browser';this.bootStarted=performance.now();this.bootEnded=null;this.memoryMiB=memoryMiB;this.bootOutput='';this.failedStats=null;this.bridgeReady=false;this.shellReady=false;
+    this.setState('booting',this.bootStage);const start=this.bootStarted;let timeout;
     try{
       if(!isSecureContext||!crossOriginIsolated||typeof SharedArrayBuffer==='undefined')throw new Error('Open this app through its local server or HTTPS with COOP/COEP headers. Opening the HTML file directly cannot run this kernel.');
       await this.claim();
@@ -24,7 +26,7 @@ export class Machine extends EventTarget {
       const saved=snapshot===undefined?await load():snapshot;
       const workspace=saved?validateSnapshot(saved):null;
       if(workspace)await verifySnapshot(workspace);
-      this.setState('booting','Loading Linux');
+      this.bootStage='Loading Linux';this.setState('booting',this.bootStage);
       const [kernel,initrd]=await Promise.all([
         WebAssembly.compileStreaming(fetch('assets/vmlinux.wasm').then(r=>{if(!r.ok)throw new Error('Linux kernel could not be loaded');return r;})),
         fetch('assets/initramfs.cpio.gz').then(r=>{if(!r.ok)throw new Error('Linux filesystem could not be loaded');return r.arrayBuffer();})
@@ -33,21 +35,34 @@ export class Machine extends EventTarget {
       let readyResolve,readyReject;const ready=new Promise((resolve,reject)=>{readyResolve=resolve;readyReject=reject;});
       let bridgeReady=false;
       const checkReady=()=>{if(bridgeReady&&this.output.includes('root@browser-linux:~#'))readyResolve();};
-      const timeout=setTimeout(()=>readyReject(new Error('Linux did not finish booting within 45 seconds')),45000);
+      this.bootStage='Starting the kernel';
+      timeout=setTimeout(()=>readyReject(new Error('Linux stopped while '+this.bootStage.toLowerCase()+'. Open Boot details to see the startup report.')),45000);
       this.os=await linux('runtime/linux-worker.js',kernel,'maxcpus=3 nohz_full=2-63 rcu_nocbs=2-63 root=/dev/ram0 rootfstype=ramfs init=/init console=hvc console=ttyS0',initrd,
         text=>{this.logs.push(text);if(this.logs.length>1000)this.logs.shift();if(text.startsWith('FATAL:')){const e=new Error(text);readyReject(e);this.fail(e);}},
-        text=>{this.output=(this.output+text).slice(-1000000);this.emit('console',text);checkReady();},
-        {memoryMiB,ready:()=>{bridgeReady=true;checkReady();},error:e=>{readyReject(e);this.fail(e);}});
+        text=>{
+          this.output=(this.output+text).slice(-1000000);this.emit('console',text);
+          if(this.state==='booting'){
+            if(this.output.includes('Browser Linux |'))this.bootStage='Starting the terminal';
+            else if(this.output.includes('Run /init'))this.bootStage='Starting the workspace';
+            else if(this.output.includes('Bringing up secondary CPUs'))this.bootStage='Starting Linux processors';
+            this.shellReady=this.output.includes('root@browser-linux:~#');
+            if(this.shellReady&&!bridgeReady)this.bootStage='Connecting the file browser';
+            this.emit('boot-progress',this.bootStage);
+          }
+          checkReady();
+        },
+        {memoryMiB,ready:()=>{bridgeReady=true;this.bridgeReady=true;checkReady();},error:e=>{readyReject(e);this.fail(e);}});
       try{await ready;}finally{clearTimeout(timeout);}
-      this.setState('restoring','Restoring workspace');
+      this.bootStage='Restoring workspace';this.setState('restoring',this.bootStage);
       if(workspace)await this.restore(workspace);
+      this.bootStage='Finishing startup';this.setState('restoring',this.bootStage);
       this.info=await this.os.rpc('info');
-      this.bootMs=performance.now()-start;this.setState('running');this.emit('ready',this.info);
+      this.bootEnded=performance.now();this.bootMs=this.bootEnded-start;this.bootOutput=this.output;this.bootStage='Ready';this.setState('running');this.emit('ready',this.info);
       this.autoSave=setInterval(()=>{if(this.state==='running')this.save().catch(error=>this.emit('save-error',error));},10000);
       return this.info;
-    }catch(error){this.os?.stop();this.fail(error);throw error;}
+    }catch(error){this.fail(error);throw error;}finally{clearTimeout(timeout);}
   }
-  fail(error){clearInterval(this.autoSave);this.os?.stop();if(this.state!=='error')this.setState('error',error.message);}
+  fail(error){clearInterval(this.autoSave);this.bootEnded??=performance.now();this.failedStats||=this.os?.stats();this.os?.stop();if(this.state!=='error')this.setState('error',error.message);}
   rpc(method,args){if(!this.os)throw new Error('Linux is not running');return this.os.rpc(method,args);}
   async write(path,data){
     const bytes=typeof data==='string'?new TextEncoder().encode(data):new Uint8Array(data);

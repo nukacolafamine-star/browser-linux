@@ -1,11 +1,11 @@
 {
   "browser": "154.0.8037.57",
-  "assetVersion": "2f586de092c33eef",
+  "assetVersion": "2fb809d881e62fe4",
   "checks": [
     {
       "name": "real Linux kernel boot",
       "detail": {
-        "bootMs": 1068.5649999976158,
+        "bootMs": 1102.7300000190735,
         "memoryBytes": 268435456
       },
       "passed": true

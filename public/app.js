@@ -50,6 +50,7 @@ machine.addEventListener('state',({detail:{state,detail}})=>{
 machine.addEventListener('saving',()=>$('saved-state').textContent='Saving workspace…');
 machine.addEventListener('saved',({detail:snapshot})=>{$('saved-state').textContent='Saved '+new Date(snapshot.savedAt).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});$('storage-size').textContent=bytesLabel(snapshot.totalBytes);});
 machine.addEventListener('save-error',({detail:error})=>{$('saved-state').textContent='Save failed · export your work';toast(error.message,true);});
+machine.addEventListener('boot-progress',({detail:stage})=>$('status').textContent=stage);
 async function boot(options={}){
   if(busyBoot)return;busyBoot=true;$('restart').disabled=true;$('retry').disabled=true;$('error-banner').hidden=true;interactive=false;bootBuffer='';term.reset();
   try{await machine.boot({memoryMiB:Number($('memory-choice').value),...options});await refreshFiles();await refreshInfo();fitTerminal();term.focus();$('saved-state').textContent='Autosave every 10 seconds';}
@@ -132,7 +133,20 @@ document.querySelectorAll('[data-view]').forEach(button=>button.onclick=()=>swit
 const keys={escape:'\x1b',tab:'\t',interrupt:'\x03',eof:'\x04',up:'\x1b[A',down:'\x1b[B'};
 document.querySelectorAll('[data-key]').forEach(button=>button.onclick=()=>{if(machine.state==='running')machine.os.key_input(keys[button.dataset.key]);term.focus();});
 $('interrupt').onclick=()=>{machine.os?.key_input('\x03');term.focus();};$('clear-terminal').onclick=()=>{term.clear();term.focus();};
-$('show-boot-log').onclick=()=>{$('boot-log').textContent=machine.output+'\n\nRuntime log:\n'+machine.logs.join('\n');$('log-dialog').showModal();};$('close-log').onclick=()=>$('log-dialog').close();
+function showBootDetails(){
+  const {bootOutput,logs,...diagnostics}=machine.diagnostics();
+  $('boot-log').textContent=(bootOutput||'No kernel output yet.').replace(/\r\n/g,'\n')+'\n\nRuntime log:\n'+(logs.join('\n')||'No runtime messages yet.')+'\n\nStartup report:\n'+JSON.stringify(diagnostics,null,2);
+  $('boot-copy-status').hidden=true;$('log-dialog').showModal();
+}
+$('show-boot-log').onclick=showBootDetails;$('error-boot-details').onclick=showBootDetails;$('close-log').onclick=()=>$('log-dialog').close();
+$('copy-boot-report').onclick=async()=>{
+  const report=$('boot-log'),status=$('boot-copy-status');status.hidden=false;
+  try{await navigator.clipboard.writeText(report.textContent);status.textContent='Report copied.';}
+  catch{
+    report.focus();const range=document.createRange();range.selectNodeContents(report);const selection=window.getSelection();selection.removeAllRanges();selection.addRange(range);
+    status.textContent='Automatic copying is unavailable. The report is selected; use your browser’s Copy action.';
+  }
+};
 $('save-workspace').onclick=action(async()=>{await machine.save();toast('Workspace saved in this browser');if(navigator.storage?.persist){const persistent=await navigator.storage.persist();$('persist-state').textContent=persistent?'Persistent browser storage granted.':'Browser-managed storage. Keep exported backups.';}});
 $('export-workspace').onclick=action(exportWorkspace);$('machine-export').onclick=action(exportWorkspace);$('restart').onclick=action(restart);$('retry').onclick=action(()=>boot());$('about-button').onclick=()=>switchView('machine');
 $('refresh-files').onclick=action(()=>refreshFiles());$('path-form').onsubmit=action(async event=>{event.preventDefault();await refreshFiles($('current-path').value);});

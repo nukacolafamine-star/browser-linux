@@ -1,5 +1,17 @@
 # Verification record
 
+## 0.1.1 WebKit startup investigation
+
+The user reported a physical iPhone reaching the init banner without a shell. A portable Playwright WebKit 26.6 engine on Windows reproduced startup stalls, first during CPU startup and then at the same init-to-terminal stage. Shared memory and asset loading worked; extending the watchdog did not address the stalled workers.
+
+Kernel function tracing identified ticket-lock polling, the task-parking loop in `wait_task_inactive` and CPU-statistics synchronization in `kcpustat_cpu_fetch` when reading `/proc/uptime`. The pinned compiler had lowered their shared reads to ordinary WebAssembly loads. A standalone reproduction using the exact ticket-lock body and 100,000 warmup calls stalled twice in WebKit despite the other thread releasing the lock; the atomic-load variants completed in approximately 125 ms. Chrome completed both variants. A simpler polling loop did not reproduce the bug, so this evidence concerns the optimized kernel loop rather than all non-atomic loads. See `verification/atomic-poll-report.json` and `tools/atomic-poll-test.mjs`.
+
+The build now makes twenty-seven specific aligned reads atomic in six functions. Tests check pinned input/output hashes, every other function and non-code section, and rejection of changed or already-patched input. The original boot arguments are retained; experimental timer changes are not shipped. The startup UI identifies the stalled stage, retains the pre-shutdown worker state and offers a copyable report; eight injected-failure UI checks passed (`verification/startup-report.json`). Physical iPhone success still requires a retry of this updated build.
+
+The final kernel candidate passed six WebKit boots without failure retries at 128 MiB (2.01–2.43 seconds locally). Real `cat`, `printf` and `uname` commands completed. A 150,000-byte patterned file was written, read, saved and restored byte-for-byte after each of five page reloads, with no uncaught browser errors. Earlier narrower candidates failed and were expanded based on traces; those failures are not counted as passes. This does not resolve the separate historical binary-integrity failure or establish reliability for every kernel operation.
+
+The built app then passed the same six online boots with its real service worker (1.89–2.24 seconds). An additional portable-WebKit offline navigation attempt failed before the new document loaded with “WebKit encountered an internal error”; the existing guest remained running. Offline navigation is therefore **not verified in WebKit/Safari**. This failure is preserved in `verification/webkit-local-report.json`. Chrome's final 12 browser checks and eight Pages checks passed, including offline boot and restoration. All 12 unit checks passed.
+
 ## Live GitHub Pages verification
 
 The deployed HTTPS site at https://nukacolafamine-star.github.io/browser-linux/ was tested in a fresh Chrome profile at a 390px touch viewport. The first visit reloaded once, enabled shared memory and booted the real kernel. A guest file was written and saved; an offline page reload booted Linux again and restored the exact contents. No uncaught browser errors were observed. See `verification/live-pages-report.json`.

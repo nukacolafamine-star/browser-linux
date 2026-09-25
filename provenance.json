@@ -1,6 +1,6 @@
 {
   "project": "Browser Linux",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "upstream": {
     "repository": "https://github.com/joelseverin/linux-wasm",
     "artifactRef": "855319c0fed3b98e23979e364a1d6270322d3975",
@@ -26,7 +26,16 @@
     "@xterm/xterm": "6.0.0",
     "@xterm/addon-fit": "0.11.0"
   },
-  "kernelTransformation": "Remove .debug_* custom sections only. Preserve executable and other custom sections.",
+  "kernelTransformation": {
+    "debugMetadata": "Remove .debug_* custom sections.",
+    "compatibility": {
+      "id": "wasm-synchronization-atomic-reads-v1",
+      "inputSha256": "a4a03de3418c729997df707946d71dafe32d5655febcb3d9ec1987fe832545f1",
+      "outputSha256": "e325182240518e4cf2e226a37ff947b827b9d0677ba7e5afedf9558bb9eba441",
+      "changedLoads": 27
+    },
+    "source": "tools/kernel-fix.mjs"
+  },
   "files": {
     "vendor/linux-wasm/vmlinux.original.wasm": {
       "bytes": 29966656,
@@ -50,11 +59,11 @@
     }
   },
   "servedAssets": {
-    "version": "8c8bcc28d3299dd9",
+    "version": "2fb809d881e62fe4",
     "assets": {
       "app.js": {
-        "bytes": 18847,
-        "sha256": "e168e51c71f46ae7222810ae65a21f89c3e369a9899115634ad300f8a4df7077"
+        "bytes": 19789,
+        "sha256": "da3c1bac9a444e472d1aad1793044a49c1985811624d421a13cb8c612d979770"
       },
       "assets/addon-fit.js": {
         "bytes": 1521,
@@ -65,8 +74,8 @@
         "sha256": "c4012121c503e40a858e77f70d47968467bc1871421ba23e43ac691bb57cd56a"
       },
       "assets/vmlinux.wasm": {
-        "bytes": 3710340,
-        "sha256": "a4a03de3418c729997df707946d71dafe32d5655febcb3d9ec1987fe832545f1"
+        "bytes": 3710367,
+        "sha256": "e325182240518e4cf2e226a37ff947b827b9d0677ba7e5afedf9558bb9eba441"
       },
       "assets/xterm.css": {
         "bytes": 7112,
@@ -77,16 +86,16 @@
         "sha256": "14903579ff54664cd72f8e8699e6961a6272c21863ec1c3b118cdc8af5d4a972"
       },
       "bootstrap.js": {
-        "bytes": 2723,
-        "sha256": "cbc4f7f4872a435b81d89aaef74ecd37dca14c69b54fa254252f4749b25e1abc"
+        "bytes": 2840,
+        "sha256": "3253d885284472cb4ba1398b3dd6bdbd07b81e8d9646b73f776115e3bc40daab"
       },
       "icon.svg": {
         "bytes": 251,
         "sha256": "60fff2efb7d566c161f49fdd4529f7349995b78ce2984376115936612ad53812"
       },
       "index.html": {
-        "bytes": 8433,
-        "sha256": "4fabb5d90e7290c05f8140c0d744d6d83db62a20fa367e048324983c8847c18f"
+        "bytes": 8728,
+        "sha256": "1a8c87010771c19c1e8fd9e51e8318528f4aaa40caddd0382a92390d8a42bd6b"
       },
       "integrity.js": {
         "bytes": 872,
@@ -105,8 +114,8 @@
         "sha256": "b569f629d00f2626a8100df2a1798210535621e42164dfd426a6fe5aac7b0ccd"
       },
       "machine.js": {
-        "bytes": 6570,
-        "sha256": "6acaf0d1155a162b9d078e1ba49e3d0725920cc6519796ebad6214d0863a3240"
+        "bytes": 8320,
+        "sha256": "4dd72f4d57170590470f1d1d9ec706d67fad18f332ced50bf651169ba35e5aa3"
       },
       "manifest.webmanifest": {
         "bytes": 221,
@@ -117,16 +126,16 @@
         "sha256": "fc98d743a90df9b85a3db1b94aa0053e36b0957843b652da1d27b89b9e390928"
       },
       "runtime/linux-worker.js": {
-        "bytes": 24836,
-        "sha256": "cbc2e6f4f3202df58c889e66ec721407c2bf8dae8dca7464064f120463f8d90d"
+        "bytes": 25215,
+        "sha256": "f6874a213ae670fa778aa3610045cf71305a067fd90cb90d722ff352c6902623"
       },
       "runtime/linux.js": {
-        "bytes": 10120,
-        "sha256": "640b74d8f8ee9d4384cde830e0f7538ba2c6c34f6a8726d6bdce7cc263817173"
+        "bytes": 10632,
+        "sha256": "a1b254afcb97382a4f34cca3716fefb6043213a53dcb1b7548b5f9e9e3ed931c"
       },
       "sources.html": {
-        "bytes": 1909,
-        "sha256": "809ed99b2e2205311e8c8e8a905270ddb24f77f2f91331de4855de6d75fc2ce9"
+        "bytes": 2260,
+        "sha256": "1ae2d71653faa5766a4a00c5337e323c989a9824e113bc827499705807d7a65c"
       },
       "storage.js": {
         "bytes": 3635,

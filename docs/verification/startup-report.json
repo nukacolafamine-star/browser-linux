@@ -1,0 +1,42 @@
+{
+  "url": "http://127.0.0.1:4173/",
+  "startedAt": "2026-09-25T08:47:10.526Z",
+  "checks": [
+    {
+      "name": "stalled startup identifies the terminal stage and keeps restart available",
+      "passed": true
+    },
+    {
+      "name": "failure preserves worker diagnostics before shutdown clears runtime state",
+      "passed": true
+    },
+    {
+      "name": "Boot details contains readable logs and diagnostic JSON without duplicated logs",
+      "passed": true
+    },
+    {
+      "name": "blocked clipboard selects the full report and shows manual-copy instructions",
+      "passed": true
+    },
+    {
+      "name": "clipboard success copies the displayed report",
+      "passed": true
+    },
+    {
+      "name": "restart retries the runtime and retains diagnostics for the new failure",
+      "passed": true
+    },
+    {
+      "name": "bootstrap failure hides unavailable report actions and offers retry",
+      "passed": true
+    },
+    {
+      "name": "no uncaught browser errors",
+      "passed": true
+    }
+  ],
+  "errors": [],
+  "browser": "154.0.8037.57",
+  "passed": true,
+  "finishedAt": "2026-09-25T08:47:12.371Z"
+}

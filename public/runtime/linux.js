@@ -3,6 +3,8 @@
 /// Create a Linux machine and run it.
 const linux = async (worker_url, vmlinux, boot_cmdline, initrd, log, console_write, hooks = {}) => {
   const workers = new Set();
+  const workerStates = new Map();
+  const forgetWorker = worker => { workers.delete(worker); workerStates.delete(worker); };
   const mailbox = new SharedArrayBuffer(1024 * 1024);
   const control = new Int32Array(mailbox, 0, 4);
   let stopped = false;
@@ -60,7 +62,7 @@ const linux = async (worker_url, vmlinux, boot_cmdline, initrd, log, console_wri
       if (cpus[message.cpu]) {
         log("[Main]: Stopping CPU " + message.cpu);
         cpus[message.cpu].worker.terminate();
-        workers.delete(cpus[message.cpu].worker);
+        forgetWorker(cpus[message.cpu].worker);
         delete cpus[message.cpu];
       } else {
         log("[Main]: Tried to stop CPU " + message.cpu + " but it was already stopped (broken system)!");
@@ -76,7 +78,7 @@ const linux = async (worker_url, vmlinux, boot_cmdline, initrd, log, console_wri
       const task = tasks[message.dead_task];
       if (!task) return;
       if (task.running) task.kill = true;
-      else { task.worker.terminate(); workers.delete(task.worker); delete tasks[message.dead_task]; }
+      else { task.worker.terminate(); forgetWorker(task.worker); delete tasks[message.dead_task]; }
     },
 
     serialize_tasks: (message) => {
@@ -90,7 +92,7 @@ const linux = async (worker_url, vmlinux, boot_cmdline, initrd, log, console_wri
       // Release the above write of last_task and wake up the task.
       lock_notify(tasks[message.next_task].locks, "serialize");
       if (tasks[message.prev_task].kill) {
-        const task = tasks[message.prev_task]; task.worker.terminate(); workers.delete(task.worker); delete tasks[message.prev_task];
+        const task = tasks[message.prev_task]; task.worker.terminate(); forgetWorker(task.worker); delete tasks[message.prev_task];
       }
     },
 
@@ -115,6 +117,9 @@ const linux = async (worker_url, vmlinux, boot_cmdline, initrd, log, console_wri
 
     log: (message) => {
       log(message.message);
+    },
+    worker_status: (message,worker) => {
+      const record=workerStates.get(worker);if(record){record.phase=message.phase;record.updated=performance.now();}
     },
     bridge_ready: () => { bridgeReady = true; hooks.ready?.(); },
     bridge_result: message => {
@@ -182,6 +187,7 @@ const linux = async (worker_url, vmlinux, boot_cmdline, initrd, log, console_wri
     // Note: SharedWorker does not seem to allow WebAssembly Module or Memory instances posted.
     const worker = new Worker(worker_url, { name: name });
     workers.add(worker);
+    workerStates.set(worker,{name,phase:'created',updated:performance.now()});
 
     let locks = {
       serialize: 0,
@@ -243,8 +249,8 @@ const linux = async (worker_url, vmlinux, boot_cmdline, initrd, log, console_wri
       });
       const result = queue.then(run); queue = result.catch(()=>{}); return result;
     },
-    stats: () => ({workers:workers.size,memoryBytes:memory.buffer.byteLength,cpus:Object.keys(cpus).length}),
-    stop: () => { stopped = true; for (const worker of workers) worker.terminate(); workers.clear(); if (pending) { pending.reject(new Error('Linux stopped')); pending=null; } },
+    stats: () => ({workers:workers.size,memoryBytes:memory.buffer.byteLength,cpus:Object.keys(cpus).length,workerStates:[...workerStates.values()].map(({name,phase,updated})=>({name,phase,ageMs:Math.round(performance.now()-updated)}))}),
+    stop: () => { stopped = true; for (const worker of workers) worker.terminate(); workers.clear();workerStates.clear(); if (pending) { pending.reject(new Error('Linux stopped')); pending=null; } },
     key_input: (data) => {
       if (stopped) return;
       const key_buffer = text_encoder.encode(data);  // Possibly UTF-8 (up to 16 bits).

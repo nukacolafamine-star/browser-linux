@@ -1,0 +1,26 @@
+{
+  "engine": "Playwright WebKit on Windows, not physical iOS Safari",
+  "browser": "26.6",
+  "target": "http://127.0.0.1:4173",
+  "bootArguments": "maxcpus=3 nohz_full=2-63 rcu_nocbs=2-63",
+  "passed": true,
+  "checks": [
+    "150000-byte patterned file write/read verified and saved",
+    "Real Linux cat command reads file created through desktop bridge",
+    "Real shell printf and uname commands completed",
+    "Five document reloads booted and restored all binary bytes exactly",
+    "No uncaught browser errors"
+  ],
+  "bootMilliseconds": [
+    2007.52,
+    2365.3999999999996,
+    2302.1,
+    2429.86,
+    2374.84,
+    2297.4
+  ],
+  "startedAt": "2026-09-25T08:45:12.326Z",
+  "finishedAt": "2026-09-25T08:45:29.506Z",
+  "errors": [],
+  "kernelSha256": "e325182240518e4cf2e226a37ff947b827b9d0677ba7e5afedf9558bb9eba441"
+}

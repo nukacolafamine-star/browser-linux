@@ -21,4 +21,6 @@ The Linux and BusyBox downloads match their publisher SHA-256 checksum files. Al
 
 The kernel's runtime identifier `6.4.16-00012-gf3e782cb608b` matches the final archived kernel patch commit. Linux and BusyBox were not rebuilt from C during prototype development, and byte-for-byte reproduction of the upstream binaries has not been established. BusyBox/musl provenance follows the pinned upstream recipe. See [upstream provenance and rebuilding](UPSTREAM.md) and the source bundle's manifest for the precise evidence and limitations.
 
+Version 0.1.1 additionally applies the reproducible synchronization correction in the repository's `tools/kernel-fix.mjs`. Its source and checks are part of the current application repository; the v0.1.0 source archive remains the unchanged upstream base. The served kernel therefore differs from the archived upstream binary by twenty-seven atomic-load substitutions, in addition to removed debug metadata. The C kernel was not rebuilt for this change.
+
 The source bundle is a separate release download. It is not part of the page's initial download or offline cache. Running the browser application does not install any of these source packages or build tools on the host operating system.

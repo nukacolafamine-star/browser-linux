@@ -1,4 +1,4 @@
-# Browser Linux 0.1
+# Browser Linux 0.1.1
 
 A working experimental Linux workstation in a browser. It boots a genuine Linux 6.4.16 kernel compiled to WebAssembly, with a BusyBox shell, a file browser and a text editor sharing the kernel's real filesystem. Computation happens on your device.
 
@@ -51,7 +51,9 @@ This is the first working foundation, not a finished general-purpose Linux distr
 
 **Intermittent binary-data corruption and occasional boot stalls were observed during development. Their root causes remain unresolved.** Subsequent repeated restart tests passed. Writes and restores now have integrity checks that stop a failed session before it can replace the saved backup. A boot that does not reach the shell times out and offers a restart. These checks do not establish that the underlying kernel is reliable or detect every possible later corruption. Use this as a development prototype, not the only copy of important data.
 
-Chrome and Edge were tested on this Windows machine. The responsive phone layout was tested at 390 pixels; physical iPhones, Chromebooks and embedded browsers were not tested. “Any browser” and “all native performance” are objectives, not demonstrated capabilities.
+Version 0.1.1 corrects the kernel's shared-lock polling instructions after a reproducible WebKit startup stall. It also reports the startup stage and preserves worker diagnostics behind **Boot details → Copy report**. The kernel and files still run locally.
+
+Chrome, Edge and a portable WebKit engine were tested on this Windows machine. WebKit engine testing is not a physical iPhone test; the reported iPhone startup failure still needs a retry on the updated build. The responsive phone layout was tested at 390 pixels. "Any browser" and "all native performance" are objectives, not demonstrated capabilities.
 
 ## Development
 
@@ -63,7 +65,7 @@ npm run build
 npm test
 ```
 
-`build` repackages the pinned prebuilt kernel and BusyBox image, compiles our small guest bridge, and rebuilds offline assets. It does **not** compile Linux from C. See [upstream provenance and the separate source-build path](docs/UPSTREAM.md).
+`build` removes kernel debug metadata, applies the guarded shared-lock instruction correction to the pinned kernel, repackages the BusyBox image, compiles our small guest bridge, and rebuilds offline assets. It does **not** compile Linux from C. See [upstream provenance and the separate source-build path](docs/UPSTREAM.md).
 
 With the local server running and Chrome/Edge already installed:
 

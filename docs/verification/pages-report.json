@@ -1,7 +1,7 @@
 {
-  "url": "http://127.0.0.1:63930/browser-linux/",
-  "startedAt": "2026-09-25T07:58:20.376Z",
-  "assetVersion": "8c8bcc28d3299dd9",
+  "url": "http://127.0.0.1:65503/browser-linux/",
+  "startedAt": "2026-09-25T08:47:05.080Z",
+  "assetVersion": "2fb809d881e62fe4",
   "checks": [
     {
       "name": "test server provides no isolation headers",
@@ -17,8 +17,8 @@
       "detail": {
         "isolated": true,
         "shared": true,
-        "controller": "http://127.0.0.1:63930/browser-linux/sw.js",
-        "bootMs": 934.0949999988079,
+        "controller": "http://127.0.0.1:65503/browser-linux/sw.js",
+        "bootMs": 974.6750000119209,
         "memoryBytes": 134217728
       }
     },
@@ -65,14 +65,14 @@
   ],
   "errors": [],
   "navigations": [
-    "http://127.0.0.1:63930/browser-linux/",
-    "http://127.0.0.1:63930/browser-linux/",
-    "http://127.0.0.1:63930/browser-linux/",
-    "http://127.0.0.1:63930/browser-linux/"
+    "http://127.0.0.1:65503/browser-linux/",
+    "http://127.0.0.1:65503/browser-linux/",
+    "http://127.0.0.1:65503/browser-linux/",
+    "http://127.0.0.1:65503/browser-linux/"
   ],
   "browser": "154.0.8037.57",
   "passed": true,
-  "finishedAt": "2026-09-25T07:58:24.674Z",
+  "finishedAt": "2026-09-25T08:47:09.809Z",
   "serverRequests": [
     "/browser-linux/",
     "/browser-linux/.nojekyll",
@@ -95,6 +95,7 @@
     "/browser-linux/assets/xterm.js",
     "/browser-linux/bootstrap.js",
     "/browser-linux/icon.svg",
+    "/browser-linux/icon.svg",
     "/browser-linux/index.html",
     "/browser-linux/integrity.js",
     "/browser-linux/licenses/GPL-2.0.txt",
@@ -104,7 +105,6 @@
     "/browser-linux/manifest.webmanifest",
     "/browser-linux/runtime/browser-agent.js",
     "/browser-linux/runtime/linux-worker.js",
-    "/browser-linux/icon.svg",
     "/browser-linux/runtime/linux.js",
     "/browser-linux/sources.html",
     "/browser-linux/storage.js",

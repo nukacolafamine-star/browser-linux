@@ -14,4 +14,6 @@ All assets and the manifest use relative URLs, so repository subpaths work. Brow
 
 The first local deployment-path test passed all seven checks, including boot and offline restore. This establishes the static-host startup path in Chrome; physical iPhone Safari has not been tested. Open the link in the phone's full browser if an embedded browser cannot expose the required APIs.
 
-The underlying experimental kernel still has the known boot and integrity issues listed in `VERIFICATION.md`. Hosting does not change those limitations. Keep exported copies of important work.
+Version 0.1.1 corrects three WebKit kernel synchronization stalls and adds **Boot details → Copy report**. The public header shows the version. Old tabs may keep an older offline cache active until they close; for a clean compatibility test, open the site in a fresh private browser session and check that the header says **0.1.1**. Private-session workspace storage is temporary, so export work before closing that session.
+
+Online boot and workspace restoration were tested in portable Windows WebKit. Physical iPhone success still needs confirmation, and offline navigation remains unverified in Safari. The underlying experimental kernel still has the separate known integrity issues listed in `VERIFICATION.md`. Hosting does not change those limitations. Keep exported copies of important work.
