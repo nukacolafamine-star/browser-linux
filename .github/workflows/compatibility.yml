@@ -21,7 +21,7 @@ jobs:
   compile:
     if: github.event_name != 'workflow_dispatch' || inputs.runtime
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -30,9 +30,22 @@ jobs:
       - uses: docker/setup-buildx-action@v3
       - name: Prepare pinned source recipe
         run: node tools/compatibility-build/prepare-runtime.mjs
+      - name: Cache the isolated compiler and library dependencies
+        uses: docker/build-push-action@v6
+        timeout-minutes: 30
+        with:
+          context: tools/compatibility-build
+          file: tools/compatibility-build/generated/runtime.Dockerfile
+          target: qemu-emscripten-dev
+          build-args: |
+            QEMU_REPO_VERSION=8604ed49a3cde392890b014a8d5a959c8a2fe72a
+            EMSDK_VERSION_QEMU=4.0.10
+          cache-from: type=gha,scope=browser-linux-qemu-proof
+          cache-to: type=gha,mode=max,scope=browser-linux-qemu-dependencies
+          outputs: type=cacheonly
       - name: Compile x86_64 emulator for the browser
         uses: docker/build-push-action@v6
-        timeout-minutes: 35
+        timeout-minutes: 25
         with:
           context: tools/compatibility-build
           file: tools/compatibility-build/generated/runtime.Dockerfile
@@ -41,7 +54,9 @@ jobs:
             QEMU_REPO_VERSION=8604ed49a3cde392890b014a8d5a959c8a2fe72a
             EMSDK_VERSION_QEMU=4.0.10
             WASM_MEMORY_MIB=1024
-          cache-from: type=gha,scope=browser-linux-qemu-proof
+          cache-from: |
+            type=gha,scope=browser-linux-qemu-dependencies
+            type=gha,scope=browser-linux-qemu-proof
           cache-to: type=gha,mode=max,scope=browser-linux-qemu-proof
           outputs: type=local,dest=compatibility-artifact
       - name: Record reproducibility inputs
@@ -50,7 +65,6 @@ jobs:
           mkdir -p compatibility-artifact/provenance
           cp tools/compatibility-build/generated/source-lock.json compatibility-artifact/provenance/
           cp tools/compatibility-build/runtime-stage.Dockerfile compatibility-artifact/provenance/
-          cp tools/compatibility-build/patch-egl.py compatibility-artifact/provenance/
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -70,7 +84,15 @@ jobs:
           outputs: type=local,dest=guest-artifact
           cache-from: type=gha,scope=browser-linux-guest-proof
           cache-to: type=gha,mode=max,scope=browser-linux-guest-proof
+      - name: Install emulator on the isolated CI runner
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends qemu-system-x86
+      - name: Verify the real Linux Wayland guest with software rendering
+        timeout-minutes: 3
+        run: python3 tools/compatibility-build/verify-guest.py guest-artifact --startup-timeout 90
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: browser-linux-guest-proof
           path: guest-artifact
