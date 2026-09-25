@@ -62,6 +62,6 @@ Primary references:
 - [Pinned QEMU license text](https://github.com/ktock/qemu-wasm/blob/8604ed49a3cde392890b014a8d5a959c8a2fe72a/COPYING)
 - [Pinned container2wasm build recipe](https://github.com/container2wasm/container2wasm/blob/ecb4caa499f19f1d5cfcddd43b80aa78f98e5102/Dockerfile)
 - [Alpine APK origin/commit/license fields](https://github.com/alpinelinux/apk-tools/blob/v2.14.6/src/package.c)
-- [Alpine source-package implementation](https://github.com/alpinelinux/abuild/blob/master/abuild.in)
+- [Alpine 3.14.1 source-package implementation](https://github.com/alpinelinux/abuild/blob/3.14.1/abuild.in)
 - [Emscripten port source handling](https://github.com/emscripten-core/emscripten/blob/4.0.10/tools/ports/__init__.py)
 - [Published xterm-pty 0.10.1 metadata](https://registry.npmjs.org/xterm-pty/0.10.1)

@@ -80,7 +80,10 @@ def collect(installed, versions, output):
         working = directory / 'recipe' / package_path
         env = dict(os.environ, REPODEST=str(directory), SRCDEST='/source-cache', CARCH='x86_64')
         # verify is explicit: srcpkg itself calls fetch but does not verify.
-        run('abuild', '-F', 'fetch', 'verify', 'srcpkg', cwd=working, env=env)
+        # Alpine 3.21's sumcheck changes cwd to srcdir; a separate invocation
+        # restores startdir before srcpkg packages local install/trigger files.
+        run('abuild', '-F', 'fetch', 'verify', cwd=working, env=env)
+        run('abuild', '-F', 'srcpkg', cwd=working, env=env)
         # abuild srcpkg uses "$pkgname-$pkgver-$pkgrel", while APK versions
         # include the literal -r before pkgrel.
         source_version = re.sub(r'-r([0-9]+)$', r'-\1', version)
