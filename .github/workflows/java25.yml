@@ -1,0 +1,52 @@
+name: Verify optional Java25 in the Linux guest
+on:
+  workflow_dispatch:
+    inputs:
+      guest_run:
+        description: Successful compatibility workflow containing the guest artifact
+        type: string
+        default: '36157834294'
+permissions:
+  contents: read
+  actions: read
+jobs:
+  java25:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build the separate musl Java25 runtime pack
+        uses: docker/build-push-action@v6
+        with:
+          context: tools/compatibility-build/java25
+          outputs: type=local,dest=java-artifact
+          cache-from: type=gha,scope=browser-linux-java25-proof
+          cache-to: type=gha,mode=max,scope=browser-linux-java25-proof
+      - name: Download the existing default guest without rebuilding it
+        uses: actions/download-artifact@v4
+        with:
+          name: browser-linux-guest-proof
+          path: guest-artifact
+          run-id: ${{ inputs.guest_run }}
+          github-token: ${{ github.token }}
+      - name: Install native emulator only on the isolated CI runner
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends qemu-system-x86
+      - name: Validate Java25 inside the real Linux guest over its file exchange
+        timeout-minutes: 5
+        run: |
+          python3 tools/compatibility-build/verify-guest.py guest-artifact --startup-timeout 90 --java-pack java-artifact/java25-smoke.tar.gz
+      - name: Preserve runtime and guest execution evidence
+        if: always()
+        run: |
+          mkdir -p java-artifact/guest-proof
+          cp -a guest-artifact/native-proof/report.json guest-artifact/native-proof/serial.log java-artifact/guest-proof/ 2>/dev/null || true
+          cp tools/compatibility-build/java25/Dockerfile tools/compatibility-build/java25/Java25Smoke.java java-artifact/
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: browser-linux-java25-proof
+          path: java-artifact
+          retention-days: 7

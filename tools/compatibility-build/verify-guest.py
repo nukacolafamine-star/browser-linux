@@ -10,6 +10,7 @@ from pathlib import Path
 import re
 import socket
 import subprocess
+import tarfile
 import threading
 import time
 
@@ -17,6 +18,7 @@ import time
 parser = argparse.ArgumentParser()
 parser.add_argument("artifact", type=Path)
 parser.add_argument("--startup-timeout", type=int, default=90)
+parser.add_argument("--java-pack", type=Path, help="Optional CI-built Java25 pack; never modifies the default guest image")
 args = parser.parse_args()
 artifact = args.artifact.resolve()
 proof = artifact / "native-proof"
@@ -24,6 +26,9 @@ proof.mkdir(exist_ok=True)
 exchange = proof / "exchange"
 exchange.mkdir(exist_ok=True)
 (exchange / "incoming.txt").write_text("native exchange input\n", encoding="utf-8")
+if args.java_pack:
+    with tarfile.open(args.java_pack, "r:gz") as archive:
+        archive.extractall(exchange, filter="data")
 sock_path = proof / "qmp.sock"
 report = {"scope": "Native QEMU TCG on isolated CI; not browser acceptance", "passed": False, "checks": []}
 serial_chunks = []
@@ -145,6 +150,28 @@ try:
     wait_for(lambda: (exchange / "outgoing.txt").exists(), 10, "guest writing the shared exchange")
     assert (exchange / "outgoing.txt").read_text() == "guest exchange output\n"
     report["checks"].append("Virtio 9P exchange verified in both directions with an isolated CI directory")
+    if args.java_pack:
+        java_results = []
+        expected = bytes((i * 31 + 7) & 255 for i in range(65536))
+        for label, mode in [("INT", "-Xint"), ("JIT", "")]:
+            offset = len(serial())
+            java_started = time.monotonic()
+            output_name = f"java-proof-{label}.bin"
+            serial_command(f"timeout 90 /mnt/browser/java25/bin/java {mode} -Xms16m -Xmx96m "
+                           "-XX:ReservedCodeCacheSize=32m -XX:MaxMetaspaceSize=64m -XX:+UseSerialGC "
+                           "-XX:ActiveProcessorCount=1 -Xlog:gc -jar /mnt/browser/proof/java25-smoke.jar "
+                           f"/mnt/browser/{output_name}; java_status=$?; printf 'JAVA_%s_EXIT=%s\\n' {label} \"$java_status\"")
+            marker = rf"JAVA_{label}_EXIT=(\d+)"
+            wait_for(lambda: re.search(marker, serial()[offset:]) is not None, 110, f"Java25 {label} guest process")
+            output = serial()[offset:]
+            assert re.search(marker, output)[1] == "0", f"Java25 {label} failed: {output}"
+            assert "JAVA25_SMOKE_OK" in output, f"Java25 {label} did not complete its checks"
+            assert "GC(" in output, f"Java25 {label} did not report a garbage collection"
+            assert (exchange / output_name).read_bytes() == expected, f"Java25 {label} file bytes differed"
+            java_results.append({"mode": label, "elapsedSeconds": round(time.monotonic() - java_started, 3),
+                                 "output": output, "fileSha256": hashlib.sha256(expected).hexdigest()})
+        report["java25"] = {"packBytes": args.java_pack.stat().st_size, "runs": java_results}
+        report["checks"].append("Java25 interpreter and JIT modes ran a JAR, threads, files and GC inside the real guest")
     (exchange / ".control" / "shutdown").write_text("request\n", encoding="utf-8")
     process.wait(timeout=20)
     reader.join(timeout=1)
