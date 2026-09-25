@@ -1,0 +1,27 @@
+diff --git a/hw/core/machine.c b/hw/core/machine.c
+index 0c17398..4c98967 100644
+--- a/hw/core/machine.c
++++ b/hw/core/machine.c
+@@ -1401,11 +1401,22 @@ void machine_run_board_init(MachineState *machine, const char *mem_path, Error *
+     replay_checkpoint(CHECKPOINT_INIT);
+ 
+     if (!xen_enabled()) {
++#ifdef __EMSCRIPTEN__
++        /*
++         * wasm32 linear memory is addressed as unsigned and grows to 4 GiB;
++         * leave room for the translation cache and QEMU itself.
++         */
++        if (machine->ram_size > (3072ULL << 20)) {
++            error_setg(errp, "at most 3072 MB RAM can be simulated");
++            return;
++        }
++#else
+         /* On 32-bit hosts, QEMU is limited by virtual address space */
+         if (machine->ram_size > (2047 << 20) && HOST_LONG_BITS == 32) {
+             error_setg(errp, "at most 2047 MB RAM can be simulated");
+             return;
+         }
++#endif
+     }
+ 
+     if (machine->memdev) {

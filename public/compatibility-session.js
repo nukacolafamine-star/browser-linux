@@ -206,7 +206,9 @@ async function boot() {
   if (kernel.guestPath !== '/pack/bzImage') throw new Error('Incorrect guest kernel path');
 
   // Verify the runtime before loading any of its code.
-  const scriptURL = moduleURL(await download(script)), ptyURL = moduleURL(await download(ptyScript));
+  const verbose = options.get('verbose') === '1';
+  const scriptBytes = await download(script);
+  const scriptURL = moduleURL(verbose ? withCrashStacks(scriptBytes) : scriptBytes), ptyURL = moduleURL(await download(ptyScript));
   const wasmBinary = await download(wasm);
   const packFiles = [];
   for (const file of manifest.files.filter(file => file.guestPath)) packFiles.push({path: file.guestPath, bytes: await download(file)});
@@ -265,7 +267,6 @@ async function boot() {
   // Development diagnostics: another CPU model, and the full kernel log.
   const cpuModel = options.get('cpu') || 'Westmere';
   if (!/^[A-Za-z0-9_.,=+-]{1,120}$/.test(cpuModel)) throw new Error('Unsupported CPU model');
-  const verbose = options.get('verbose') === '1';
   report.cpuModel = cpuModel;
   const append = ['console=ttyS0', 'root=/dev/vda', 'rw', 'rootfstype=ext4', ...(verbose ? ['loglevel=7'] : ['quiet', 'loglevel=3']),
     ...(gpu ? ['browser.renderer=gl'] : [])];
@@ -300,6 +301,19 @@ async function boot() {
     if (!report.wayland && report.state !== 'error') status('Startup is still in progress. The serial terminal shows the latest Linux output.');
   }, 240000);
   engine.callMain(args);
+}
+
+// Development diagnostics: log the stack of an exception that stops an
+// emulator thread; otherwise only its message reaches the page.
+function withCrashStacks(bytes) {
+  let text = new TextDecoder().decode(bytes);
+  const patch = (old, added) => {
+    if (text.split(old).length !== 2) throw new Error('Unexpected emulator script; cannot add diagnostics');
+    text = text.replace(old, added + old);
+  };
+  patch('  quit_(1, e);\n};', "  err('Emulator thread stopped: ' + (e?.stack || e));\n");
+  patch('      __emscripten_thread_crashed();\n      throw ex;', "      err('Emulator thread crashed: ' + (ex?.stack || ex));\n");
+  return new TextEncoder().encode(text);
 }
 
 // QEMU's select loop must see stdin as unreadable between key events, and

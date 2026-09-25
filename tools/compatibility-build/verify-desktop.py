@@ -159,11 +159,12 @@ try:
         assert marker in serial(), f"missing boot marker {marker}"
     report["checks"].append("Debian 13 booted the custom kernel; network, Weston, Xwayland socket and terminal started")
 
-    output = run("uname -a; ls -l /dev/dri; pgrep -a -u user; cat /proc/cmdline", "SYSTEM")
+    output = run("uname -a; ls -l /dev/dri; pgrep -a -u user; cat /proc/cmdline /proc/swaps", "SYSTEM")
     assert "x86_64" in output and "card0" in output and "weston" in output and "foot" in output, output
+    assert "/dev/zram0" in output, f"compressed swap is not active: {output}"
     output = run("cat /home/user/.local/state/weston.log", "WESTONLOG")
     assert re.search(r"[Pp]ixman", output), "Weston did not report the Pixman renderer"
-    report["checks"].append("Serial shell saw DRM, Weston (Pixman), the terminal and seat processes")
+    report["checks"].append("Serial shell saw DRM, Weston (Pixman), the terminal, seat processes and compressed swap")
 
     output = run("getent hosts deb.debian.org; curl -sS -o /dev/null -w 'HTTP=%{http_code}\\n' https://deb.debian.org/debian/dists/trixie/Release", "NET", 120)
     assert "HTTP=200" in output, f"HTTPS through guest DNS failed: {output}"

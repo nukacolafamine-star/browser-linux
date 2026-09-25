@@ -36,7 +36,10 @@ RUN printf '#include <SDL.h>\nint main(void) { return SDL_Init(SDL_INIT_VIDEO); 
     emcc /tmp/sdl-probe.c -pthread -sUSE_SDL=2 -o /tmp/sdl-probe.js && \
     cp /emsdk/upstream/emscripten/cache/sysroot/lib/pkgconfig/sdl2.pc /glib-emscripten/target/lib/pkgconfig/
 
-RUN EXTRA_CFLAGS="-O3 -g2 -Wno-error=unused-command-line-argument -Wno-error=unused-but-set-variable -matomics -mbulk-memory -DNDEBUG -DG_DISABLE_ASSERT -D_GNU_SOURCE -sASYNCIFY=1 -pthread -sPROXY_TO_PTHREAD=1 -sEXIT_RUNTIME=1 -sFORCE_FILESYSTEM=1 -sALLOW_TABLE_GROWTH=1 -sINITIAL_MEMORY=$((WASM_INITIAL_MEMORY_MIB*1024*1024)) -sMAXIMUM_MEMORY=$((WASM_MAXIMUM_MEMORY_PAGES*65536)) -sALLOW_MEMORY_GROWTH=1 -sWASM_BIGINT=1 -sMALLOC=emmalloc -sMODULARIZE=1 -sEXPORT_ES6=1 -sEXPORT_NAME=createQemu -sASYNCIFY_IMPORTS=ffi_call_js -sUSE_SDL=2 -sOFFSCREENCANVAS_SUPPORT=0 $XTERM_PTY_CFLAGS" ; \
+# Emscripten gives every thread a 64 KiB stack by default. QEMU keeps a 68 KiB
+# network receive buffer on the stack (net/socket.c), so each received packet
+# overwrote heap memory below the main loop thread's stack.
+RUN EXTRA_CFLAGS="-O3 -g2 -Wno-error=unused-command-line-argument -Wno-error=unused-but-set-variable -matomics -mbulk-memory -DNDEBUG -DG_DISABLE_ASSERT -D_GNU_SOURCE -sASYNCIFY=1 -pthread -sPROXY_TO_PTHREAD=1 -sEXIT_RUNTIME=1 -sFORCE_FILESYSTEM=1 -sALLOW_TABLE_GROWTH=1 -sINITIAL_MEMORY=$((WASM_INITIAL_MEMORY_MIB*1024*1024)) -sMAXIMUM_MEMORY=$((WASM_MAXIMUM_MEMORY_PAGES*65536)) -sALLOW_MEMORY_GROWTH=1 -sSTACK_SIZE=8388608 -sDEFAULT_PTHREAD_STACK_SIZE=2097152 -sWASM_BIGINT=1 -sMALLOC=emmalloc -sMODULARIZE=1 -sEXPORT_ES6=1 -sEXPORT_NAME=createQemu -sASYNCIFY_IMPORTS=ffi_call_js -sUSE_SDL=2 -sOFFSCREENCANVAS_SUPPORT=0 $XTERM_PTY_CFLAGS" ; \
     emconfigure ../configure --static --target-list=x86_64-softmmu --cpu=wasm32 --cross-prefix= \
       --without-default-features --enable-system --with-coroutine=fiber --enable-virtfs --enable-sdl --enable-pixman \
       --extra-cflags="$EXTRA_CFLAGS" --extra-cxxflags="$EXTRA_CFLAGS" \

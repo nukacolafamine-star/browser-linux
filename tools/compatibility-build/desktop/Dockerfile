@@ -61,7 +61,7 @@ RUN chmod 755 /usr/local/sbin/browser-boot /usr/local/sbin/browser-desktop /usr/
     find /usr/lib -path '*weston*' -name drm-backend.so | grep -q . && \
     find /usr/lib -path '*weston*' -name desktop-shell.so | grep -q . && \
     test -x /usr/lib/systemd/systemd-udevd && test -x /sbin/agetty && \
-    for tool in dbus-run-session dbus-uuidgen dbus-daemon seatd runuser pgrep udevadm glxinfo xdpyinfo xwininfo curl; do \
+    for tool in dbus-run-session dbus-uuidgen dbus-daemon seatd runuser pgrep udevadm glxinfo xdpyinfo xwininfo curl mkswap swapon; do \
       command -v "$tool" > /dev/null || { echo "missing $tool"; exit 1; }; \
     done && \
     weston --version
