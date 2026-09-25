@@ -6,6 +6,12 @@ import java.util.HexFormat;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public final class Java25Smoke {
+    static long hotSum(int limit) {
+        long value = 0;
+        for (int i = 1; i <= limit; i++) value += i;
+        return value;
+    }
+
     public static void main(String[] args) throws Exception {
         long started = System.nanoTime();
         if (Runtime.version().feature() != 25) throw new AssertionError("Expected Java 25");
@@ -28,8 +34,8 @@ public final class Java25Smoke {
         }
         System.gc();
         long total = 0;
-        for (int i = 1; i <= 100000; i++) total += i;
-        if (total != 5000050000L) throw new AssertionError("Arithmetic");
+        for (int i = 0; i < 20000; i++) total += hotSum(100);
+        if (total != 101000000L) throw new AssertionError("Arithmetic");
         System.out.println("JAVA25_SMOKE_OK version=" + Runtime.version()
             + " arch=" + System.getProperty("os.arch")
             + " sha256=" + HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(pattern))

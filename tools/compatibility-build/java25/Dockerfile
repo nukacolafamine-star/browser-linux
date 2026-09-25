@@ -1,6 +1,6 @@
 # Optional runtime pack built on isolated Linux CI, not the default guest image.
 FROM alpine:3.21 AS build
-RUN apk add --no-cache ca-certificates curl libstdc++ zlib
+RUN apk add --no-cache binutils ca-certificates curl libstdc++ zlib
 ARG JAVA_URL=https://corretto.aws/downloads/resources/25.0.4.8.1/amazon-corretto-25.0.4.8.1-alpine-linux-x64.tar.gz
 ARG JAVA_SHA256=23281295fc2ca0a34764ca8a7b8a3db26f870aa7261999e18812c1f1de73e82d
 RUN curl --fail --location "$JAVA_URL" -o /tmp/jdk.tar.gz && \

@@ -153,7 +153,7 @@ try:
     if args.java_pack:
         java_results = []
         expected = bytes((i * 31 + 7) & 255 for i in range(65536))
-        for label, mode in [("INT", "-Xint"), ("JIT", "")]:
+        for label, mode in [("INT", "-Xint"), ("JIT", "-Xbatch -XX:+PrintCompilation")]:
             offset = len(serial())
             java_started = time.monotonic()
             output_name = f"java-proof-{label}.bin"
@@ -167,6 +167,8 @@ try:
             assert re.search(marker, output)[1] == "0", f"Java25 {label} failed: {output}"
             assert "JAVA25_SMOKE_OK" in output, f"Java25 {label} did not complete its checks"
             assert "GC(" in output, f"Java25 {label} did not report a garbage collection"
+            if label == "JIT":
+                assert "Java25Smoke::hotSum" in output, "JIT did not report compiling the exercised method"
             assert (exchange / output_name).read_bytes() == expected, f"Java25 {label} file bytes differed"
             java_results.append({"mode": label, "elapsedSeconds": round(time.monotonic() - java_started, 3),
                                  "output": output, "fileSha256": hashlib.sha256(expected).hexdigest()})
