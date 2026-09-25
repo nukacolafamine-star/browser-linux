@@ -29,7 +29,7 @@ RUN git init -q /epoxy && cd /epoxy && git fetch -q --depth=1 https://github.com
 # virglrenderer: the vrend (OpenGL) renderer only. QEMU supplies its GL
 # contexts; no EGL, GLX, GBM, DRM, Venus or video paths.
 RUN git init -q /virgl && cd /virgl && git fetch -q --depth=1 https://gitlab.freedesktop.org/virgl/virglrenderer.git "$VIRGL_COMMIT" && \
-    git checkout -q FETCH_HEAD && \
+    git checkout -q FETCH_HEAD && python3 /tmp/gpu/patch-virglrenderer.py /virgl && \
     CFLAGS="$CFLAGS -pthread" meson setup _build --cross-file=/gpu-cross.meson --prefix=/glib-emscripten/target \
       --default-library=static --buildtype=release -Dplatforms= -Dvenus=false -Ddrm-renderers= \
       -Dvideo=false -Dtests=false -Dfuzzer=false -Dvalgrind=false -Dtracing=none -Dminigbm_allocation=false && \
@@ -47,6 +47,7 @@ RUN python3 /tmp/gpu/patch-qemu-sdl-gl.py /qemu && rm -rf /qemu/build-gpu && mkd
       --extra-cflags="$EXTRA_CFLAGS" --extra-cxxflags="$EXTRA_CFLAGS" \
       --extra-ldflags="-sEXPORTED_RUNTIME_METHODS=addFunction,removeFunction,TTY,FS,callMain,ENV -lGL -lEGL" && \
     emmake make -j 3 qemu-system-x86_64 && \
+    python3 /tmp/gpu/unproxy-egl.py qemu-system-x86_64 && \
     mkdir -p /out-gpu/runtime/vendor /out-gpu/provenance /out-gpu/sources && \
     cp qemu-system-x86_64 /out-gpu/runtime/qemu-system-x86_64.js && \
     cp qemu-system-x86_64.wasm /out-gpu/runtime/ && \

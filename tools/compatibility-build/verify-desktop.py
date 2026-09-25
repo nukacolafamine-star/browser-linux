@@ -206,18 +206,28 @@ try:
             launcher["installSeconds"] = round(time.monotonic() - launch_started, 3)
             deadline = time.monotonic() + args.launcher_timeout
             windows = ""
+            window_pattern = re.compile(r'"[^"]*":\s*\("[^"]*(?:Minecraft|Launcher)[^"]*"[^)]*\)\s+(\d+)x(\d+)', re.I)
             while time.monotonic() < deadline:
-                windows = run(f"{USER_ENV} xwininfo -root -tree | grep -i -E 'minecraft|launcher' | head -n 5", "WINDOWS", 60)
-                if re.search(r'"[^"]*(Minecraft|Launcher)[^"]*"', windows):
+                windows = run(f"{USER_ENV} xwininfo -root -tree | grep -i -E 'minecraft|launcher' | head -n 8", "WINDOWS", 60)
+                sizes = [(int(w), int(h)) for w, h in window_pattern.findall(windows)]
+                if sizes and not launcher.get("firstWindowSeconds"):
+                    launcher["firstWindowSeconds"] = round(time.monotonic() - launch_started, 3)
+                    launcher["updaterScreen"] = screendump("launcher-updater.ppm")
+                # The bootstrap shows a small updater first; the launcher itself is a large window.
+                if any(w >= 600 and h >= 400 for w, h in sizes):
+                    launcher["opened"] = True
                     break
                 time.sleep(15)
             launcher["windows"] = windows
             launcher["windowSeconds"] = round(time.monotonic() - launch_started, 3)
+            time.sleep(20)  # let the web view paint before the screenshot
             launcher["screen"] = screendump("launcher.ppm")
-            launcher["log"] = run("tail -n 40 /tmp/minecraft-launcher.log; ls -la /home/user/.minecraft 2>&1 | head -n 20", "LAUNCHLOG")[-6000:]
-            launcher["opened"] = bool(re.search(r'"[^"]*(Minecraft|Launcher)[^"]*"', windows))
+            launcher["log"] = run("tail -n 40 /tmp/minecraft-launcher.log; ls -la /home/user/.minecraft /home/user/.minecraft/launcher 2>&1 | head -n 40; tail -n 30 /home/user/.minecraft/launcher_log.txt 2>/dev/null", "LAUNCHLOG")[-8000:]
+            launcher["opened"] = launcher.get("opened", False)
+            if launcher.get("firstWindowSeconds"):
+                report["checks"].append(f"Official Minecraft Launcher bootstrap downloaded from Mojang and opened its updater in {launcher['firstWindowSeconds']}s")
             if launcher["opened"]:
-                report["checks"].append(f"Official Minecraft Launcher downloaded from Mojang and opened an X11 window in {launcher['windowSeconds']}s")
+                report["checks"].append(f"The Minecraft Launcher's main window opened in {launcher['windowSeconds']}s")
         except Exception as error:
             launcher["error"] = str(error)
 
