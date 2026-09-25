@@ -25,6 +25,7 @@ const newClone = 'RUN git init /qemu && \\\n    cd /qemu && \\\n    git remote a
 if (dockerfile.split(oldClone).length !== 2) throw new Error('Upstream QEMU clone stanza changed');
 dockerfile = dockerfile.replace(oldClone, newClone);
 dockerfile += '\n' + await readFile(path.join(here, 'runtime-stage.Dockerfile'), 'utf8');
+dockerfile += '\n' + await readFile(path.join(here, 'gpu-stage.Dockerfile'), 'utf8');
 await mkdir(path.join(here, 'generated'), { recursive: true });
 await writeFile(path.join(here, 'generated', 'runtime.Dockerfile'), dockerfile);
 await writeFile(path.join(here, 'generated', 'source-lock.json'), JSON.stringify(source, null, 2) + '\n');

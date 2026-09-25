@@ -201,7 +201,7 @@ try:
         report["launcher"] = launcher
         try:
             launch_started = time.monotonic()
-            run(f"{USER_ENV} setsid /usr/local/bin/minecraft-launcher > /tmp/minecraft-launcher.log 2>&1 < /dev/null &", "LAUNCH")
+            run(f"({USER_ENV} setsid /usr/local/bin/minecraft-launcher > /tmp/minecraft-launcher.log 2>&1 < /dev/null &)", "LAUNCH")
             wait_for(lambda: "Installed to" in run("cat /tmp/minecraft-launcher.log", "INSTALLLOG"), 300, "launcher download")
             launcher["installSeconds"] = round(time.monotonic() - launch_started, 3)
             deadline = time.monotonic() + args.launcher_timeout

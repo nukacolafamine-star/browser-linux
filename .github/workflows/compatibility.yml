@@ -15,6 +15,10 @@ on:
         description: Also check that the official Minecraft Launcher installs and opens (downloads from Mojang)
         type: boolean
         default: true
+      gpu:
+        description: Build the experimental GPU (VirGL over WebGL 2) emulator variant
+        type: boolean
+        default: false
   push:
     branches: [feature/desktop-platform]
     paths:
@@ -81,6 +85,42 @@ jobs:
         with:
           name: browser-linux-runtime
           path: compatibility-artifact
+          retention-days: 14
+  gpu:
+    if: github.event_name == 'workflow_dispatch' && inputs.gpu
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: docker/setup-buildx-action@v3
+      - name: Prepare pinned source recipe
+        run: node tools/compatibility-build/prepare-runtime.mjs
+      - name: Compile the GPU emulator variant (VirGL over WebGL 2)
+        uses: docker/build-push-action@v6
+        timeout-minutes: 75
+        with:
+          context: tools/compatibility-build
+          file: tools/compatibility-build/generated/runtime.Dockerfile
+          target: browser-linux-gpu-runtime
+          build-args: |
+            QEMU_REPO_VERSION=8604ed49a3cde392890b014a8d5a959c8a2fe72a
+            EMSDK_VERSION_QEMU=4.0.10
+            WASM_INITIAL_MEMORY_MIB=256
+            WASM_MAXIMUM_MEMORY_MIB=4096
+          cache-from: |
+            type=gha,scope=browser-linux-qemu-dependencies
+            type=gha,scope=browser-linux-qemu-proof
+            type=gha,scope=browser-linux-qemu-gpu
+          cache-to: type=gha,mode=max,scope=browser-linux-qemu-gpu
+          outputs: type=local,dest=gpu-artifact
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: browser-linux-runtime-gpu
+          path: gpu-artifact
           retention-days: 14
   desktop:
     if: github.event_name != 'workflow_dispatch' || inputs.desktop
