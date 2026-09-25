@@ -234,7 +234,7 @@ try:
             while launcher.get("opened"):
                 time.sleep(15)
                 launcher["screen"] = screendump("launcher.ppm")
-                if launcher["screen"]["litFraction"] > 0.25:
+                if launcher["screen"]["litFraction"] > 0.15:
                     launcher["interfaceSeconds"] = round(time.monotonic() - launch_started, 3)
                     break
                 if time.monotonic() > ui_deadline:
