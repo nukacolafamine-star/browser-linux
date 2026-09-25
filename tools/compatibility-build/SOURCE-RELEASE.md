@@ -4,7 +4,11 @@ This file records engineering evidence and the collection procedure. It is not a
 
 ## Current binary evidence
 
-Runtime build `36156507966` compiled successfully. Its Wasm SHA256 is `51c9c85b16d50ecb219a22b17698ef34ab067628e2ff14d635fad4f267e22924` (13,232,294 bytes). Its generated JavaScript defaults `noExitRuntime` to false, includes `exitRuntime`, and invokes `Module.onExit` when runtime keepalives allow shutdown. The artifact contains `shutdown.json`, six firmware hashes, pinned firmware commits and license files. Actual guest poweroff, disk flush, callback and restore still require behavioral testing.
+Runtime build `36161290853` compiled successfully. Its Wasm SHA256 is `47e69dc4376f24f5a13c7e76c2c0f14dc8aa8046404812ce6fdfe5d3b80ce622` (13,233,710 bytes). Its generated JavaScript defaults `noExitRuntime` to false, includes `exitRuntime`, and invokes `Module.onExit` when runtime keepalives allow shutdown. Its 9P errno translation passed two source guard tests and a compiled Emscripten probe covering 137 numeric cases. The artifact contains shutdown and patch provenance, six firmware hashes, pinned firmware commits and license files. Guest poweroff, disk flush, callback and restore need their own behavioral test evidence.
+
+Source run `36162392496` collected the matching runtime: 17 checksum-verified archives including project source, 190,597,302 bytes total, largest archive 51,646,815 bytes. The actual archived patched QEMU header and helper match binary provenance. Final linker inputs inspected in the configured QEMU build are covered by QEMU/DTC, pixman, libffi, GLib/PCRE2 and zlib source trees; Emscripten runtime and SDL2 port sources and notices are included separately.
+
+Source run `36160499903` collected all 142 installed Alpine packages as 112 exact origin/version/aports-commit archives (683,098,096 bytes; largest 154,382,361 bytes). All 227 listed checksums passed. Linux sources and Alpine patches/configuration, Mesa, and LLVM sources are present. The package inventory was collected from guest `36157834294`; final guest `36162169397` has byte-identical installed APK database, version list, and repositories. Its changed boot scripts are provided by exact project commit `f8fcce667ca37fdb65e300f0c72e10cb4ea8fb6a`. No optional Java runtime is covered by these collections.
 
 ## Present and missing material
 
@@ -22,7 +26,7 @@ The GPLv2 text bundled with QEMU defines corresponding source to include source 
 
 ## Executable collection
 
-`.github/workflows/compatibility-sources.yml` is an isolated, read-only workflow. It accepts the exact runtime and guest Actions run IDs, has a 20-minute limit per job, uploads source artifacts only, and never publishes Releases or Pages. The push trigger applies only to its own file on `feature/portable-compatibility`, so the first branch push can register/run it without changing the default branch.
+`.github/workflows/compatibility-sources.yml` is an isolated, manually dispatched, read-only workflow. It accepts the exact runtime and guest Actions run IDs, has a 20-minute limit per job, uploads source artifacts only, and never publishes Releases or Pages. Runtime and guest collection can be selected independently, so an unchanged package inventory does not require fetching the guest closure again.
 
 Runtime job:
 
@@ -56,6 +60,27 @@ docker buildx build --file tools/compatibility-build/guest-sources.Dockerfile \
 ## Verification still required before public redistribution
 
 Collectors deliberately mark manifests `reviewRequired: true`. Collection success is not the whole release check. Review the actual final linker inputs and embedded notices, associate every archive with the tested runtime/guest checksums, check the firmware source/build correspondence, and rebuild the full application/guest from the collected source in a clean environment. Resolve any missing download, unexpected library, version mismatch or incomplete package recipe; do not silently skip it. A public source release must remain available with the corresponding downloadable binaries and be linked clearly from the download page. GitHub Actions' expiring artifacts are a staging area, not the permanent source release.
+
+## Assemble permanent release assets without publishing
+
+`assemble-source-release.py` uses Python 3.11 or later and Git. It reads local artifacts, verifies every BuildKit subject checksum, confirms exact build commits, verifies source checksums and patched QEMU/firmware provenance, and requires the final guest's installed package metadata to match the collected source inventory. It never runs APKBUILD recipes locally. Output must be a new directory; an existing release is not overwritten.
+
+```sh
+python3 tools/compatibility-build/test-source-release.py
+python3 tools/compatibility-build/assemble-source-release.py \
+  --runtime /path/to/runtime-36161290853 \
+  --guest /path/to/guest-36162169397 \
+  --runtime-sources /path/to/runtime-sources-36162392496 \
+  --guest-sources /path/to/guest-sources-36160499903 \
+  --project-ref HEAD \
+  --output /path/to/new-source-release
+```
+
+The output contains two source bundle tar files, exact runtime-build/guest-build/project source archives, `release-manifest.json`, instructions, and `SHA256SUMS`. Each source asset is limited to 1.9 GB. Existing source archives are packed without recompression to keep collection fast. The release manifest maps the final runtime and guest artifact subjects to their hashes; large binary images are not duplicated into source bundles. It records the selected UI project commit, while final built UI assets still need their own build checksums.
+
+The source bundle hashes and build identity checks are engineering evidence, not a signature verification or an assertion that all upstream binaries have been independently reproduced. Firmware source gitlinks and notices are present; the bundled SeaBIOS version strings match the pinned source commit, but this procedure does not reproduce every ROM byte. Keep these limitations explicit in release records. If the optional Java pack is later published, collect and verify its exact Corretto/OpenJDK source closure separately.
+
+After review, upload the source assets and manifest to a permanent release beside the matching binaries, link the release from the browser download page, and verify the public downloads against `SHA256SUMS`. This assembler does not upload or publish anything.
 
 Primary references:
 
