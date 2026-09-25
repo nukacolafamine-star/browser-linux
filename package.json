@@ -11,7 +11,12 @@
     "test:browser": "node tools/browser-test.mjs",
     "test:pages": "node tools/pages-test.mjs",
     "test:webkit": "node tools/webkit-test.mjs",
-    "test:startup": "node tools/startup-test.mjs"
+    "test:startup": "node tools/startup-test.mjs",
+    "test:capabilities": "node tools/capability-test.mjs",
+    "test:compatibility": "node tools/compatibility-test.mjs",
+    "test:compatibility:frontend": "node tools/compatibility-frontend-test.mjs",
+    "test:compatibility:storage": "node tools/compatibility-storage-test.mjs",
+    "test:compatibility:images": "node tools/compatibility-images-test.mjs"
   },
   "dependencies": {
     "@xterm/xterm": "6.0.0",

@@ -16,6 +16,11 @@ self.addEventListener('fetch',event=>{
   event.respondWith((async()=>{
     const cache=await caches.open(CACHE);
     let response=await cache.match(event.request,{ignoreSearch:true});
+    // Explicitly downloaded compatibility images survive shell updates. Their
+    // checksums are revalidated by the guest loader; never precache them here.
+    if(!response&&event.request.url.startsWith(self.registration.scope+'compatibility/builds/')){
+      response=await (await caches.open('browser-linux-image-v1:'+self.registration.scope)).match(event.request);
+    }
     if(!response&&event.request.mode==='navigate')response=await cache.match('index.html');
     if(!response)response=await fetch(event.request);
     if(response.status===0)return response;

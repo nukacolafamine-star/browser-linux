@@ -1,5 +1,5 @@
 {
-  "version": "2fb809d881e62fe4",
+  "version": "0d146b3e7b0fdcf9",
   "assets": {
     "app.js": {
       "bytes": 19789,
@@ -26,8 +26,48 @@
       "sha256": "14903579ff54664cd72f8e8699e6961a6272c21863ec1c3b118cdc8af5d4a972"
     },
     "bootstrap.js": {
-      "bytes": 2840,
-      "sha256": "3253d885284472cb4ba1398b3dd6bdbd07b81e8d9646b73f776115e3bc40daab"
+      "bytes": 2902,
+      "sha256": "c82341af4705acab5762bc8e23c82c4bf41efc9470e0e50831c61782c5f37056"
+    },
+    "capabilities.js": {
+      "bytes": 3865,
+      "sha256": "4d504c78ec3cf13a1d6d5f19f76a43ad53c4d4d81251ebb835d7d8704bd69ac0"
+    },
+    "capability-worker.js": {
+      "bytes": 654,
+      "sha256": "0fcc0568ab27a31ea1b52ef11d0166a67c957d4d6d045dfc0661232afb8dca7f"
+    },
+    "compatibility-exchange.js": {
+      "bytes": 3265,
+      "sha256": "40049ec8cdc97edb8b6c6c6bf73b9137661191f2eac6e21ae810d447361e05a9"
+    },
+    "compatibility-images.js": {
+      "bytes": 2724,
+      "sha256": "93fc1a23c4862da15ce44347697bb46fcb32e834c10d1de0ff4c3042bcd787d8"
+    },
+    "compatibility-session.html": {
+      "bytes": 1901,
+      "sha256": "184eb0e630a0d95a84fb2b9294e9d49a608edd1cd5705028304a78457246bd04"
+    },
+    "compatibility-session.js": {
+      "bytes": 18896,
+      "sha256": "3f2285224e9e2c43a5d3d1fdc266630a960cc419c00a916fa5865abc6d44c428"
+    },
+    "compatibility-storage.js": {
+      "bytes": 18183,
+      "sha256": "04020258a64de535efa18fa174e1bc90b6ddf45e823ab8f10fd4d164d15a8782"
+    },
+    "compatibility.css": {
+      "bytes": 2250,
+      "sha256": "c3ac1f5e1f2a3eb23206ffcd10ec010356406cd3eb27d1394ff5b2a7ef7c0a64"
+    },
+    "compatibility.html": {
+      "bytes": 3309,
+      "sha256": "b6c96de7f285672cb87e1b06aaeca3db0299915b55cb16d2ca2a5e1385c5ea61"
+    },
+    "compatibility.js": {
+      "bytes": 6164,
+      "sha256": "2fcc917898c3fd16445aeb38a0607fe3485dbfa10c5c23e6103479b2c954bed4"
     },
     "icon.svg": {
       "bytes": 251,

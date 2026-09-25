@@ -23,8 +23,8 @@ function fail(error){
 async function start(){
   if(!isSecureContext)throw new Error('Open this site over HTTPS, or use the supplied local server. A downloaded HTML file cannot start Linux.');
   if(!crossOriginIsolated){
-    if(!('serviceWorker' in navigator))throw new Error('This browser cannot prepare the shared memory Linux needs. Open this link in an up-to-date Safari, Chrome or Edge browser.');
-    if(navigator.serviceWorker.controller&&sessionStorage.getItem(reloadKey))throw new Error('This browser did not enable shared memory after preparation. Close other tabs for this site, then try again in Safari, Chrome or Edge.');
+    if(!('serviceWorker' in navigator))throw new Error('This browser cannot prepare the shared memory Linux needs on this host. Service workers must be available, or the host must supply browser isolation headers.');
+    if(navigator.serviceWorker.controller&&sessionStorage.getItem(reloadKey))throw new Error('This browser did not enable shared memory after preparation. Close other tabs for this site and try again. The current engine requires shared WebAssembly memory.');
     status.textContent='Preparing Linux';message.textContent='Downloading the first few megabytes. This page will reload once when ready.';
     await timeout(navigator.serviceWorker.register('sw.js',{scope:'./',updateViaCache:'none'}),90000,'Browser setup took too long. Check your connection and try again.');
     await timeout(new Promise(resolve=>{

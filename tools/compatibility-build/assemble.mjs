@@ -37,11 +37,16 @@ await copy(path.join(guest, 'initramfs-virt'), 'pack/initramfs-virt', 'initrd', 
 await copy(path.join(guest, 'rootfs.img'), 'pack/rootfs.img.gz', 'disk', '/pack/rootfs.img', true);
 await fs.cp(path.join(runtime, 'provenance'), path.join(output, 'provenance'), {recursive: true});
 await fs.copyFile(path.join(guest, 'package-versions.txt'), path.join(output, 'provenance/guest-packages.txt'));
+const shutdown = JSON.parse(await fs.readFile(path.join(runtime, 'provenance/shutdown.json'), 'utf8').catch(() => '{}'));
+const guestCapabilities = JSON.parse(await fs.readFile(path.join(guest, 'guest-capabilities.json'), 'utf8').catch(() => '{}'));
+const cleanShutdown = shutdown.exitRuntime === true && guestCapabilities.shutdown === 'pid1-control-file'
+  && guestCapabilities.exchange === 'virtio-9p';
+if (guestCapabilities.schema) await fs.writeFile(path.join(output, 'provenance/guest-capabilities.json'), JSON.stringify(guestCapabilities, null, 2) + '\n');
 const manifest = {
   schema: 1, name: 'Alpine Linux / Weston compatibility proof', architecture: 'x86_64',
   build: hash(Buffer.from(JSON.stringify(files))).slice(0, 16), engineMemoryMiB: 1024,
-  description: 'A full x86-64 Linux guest with the Weston Wayland compositor and a terminal. Guest graphics use CPU rendering. Networking, persistent disks, Java and Minecraft are not included in this proof.',
-  guestAcceleration: false, persistentDisk: false, networking: false,
+  description: 'A full x86-64 Linux guest with the Weston Wayland compositor and a terminal. Guest graphics use CPU rendering. Networking, Java and Minecraft are not included in this proof.',
+  guestAcceleration: false, persistentDisk: cleanShutdown, cleanShutdown, networking: false,
   files,
 };
 // Versioned URLs prevent a Pages update during download from mixing runtimes.

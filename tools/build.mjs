@@ -47,6 +47,9 @@ async function walk(dir,prefix=''){
     // not downloadable app assets. A 404 here would abort offline installation.
     if(entry.name.startsWith('.'))continue;
     const name=prefix+entry.name;
+    // The compatibility guest is an explicit, large optional download with its
+    // own checksummed manifest. Never make it part of the lightweight startup.
+    if(name==='compatibility')continue;
     if(entry.isDirectory())await walk(path.join(dir,entry.name),name+'/');
     else if(!['sw.js','asset-manifest.json'].includes(name))assets.push(name);
   }
