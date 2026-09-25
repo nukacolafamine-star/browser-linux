@@ -1,0 +1,88 @@
+# Collect only. No Pages deployment, release publishing or repository writes.
+name: Collect compatibility source packages
+on:
+  workflow_dispatch:
+    inputs:
+      runtime_run:
+        description: Successful runtime artifact run ID
+        required: true
+        default: '36156507966'
+      guest_run:
+        description: Matching guest artifact run ID with installed APK metadata
+        required: true
+        default: '36157834294'
+  push:
+    branches: [feature/portable-compatibility]
+    paths: ['.github/workflows/compatibility-sources.yml']
+permissions:
+  contents: read
+  actions: read
+jobs:
+  runtime:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
+      - uses: docker/setup-buildx-action@v3
+      - name: Prepare pinned collection recipe
+        run: |
+          node tools/compatibility-build/prepare-runtime.mjs
+          node tools/compatibility-build/prepare-sources.mjs
+          gh run download "$RUNTIME_RUN" -R "$GITHUB_REPOSITORY" -n browser-linux-compatibility-proof -D expected-runtime
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUNTIME_RUN: ${{ inputs.runtime_run || '36156507966' }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: tools/compatibility-build
+          file: tools/compatibility-build/generated/sources.Dockerfile
+          target: browser-linux-runtime-sources
+          build-args: |
+            QEMU_REPO_VERSION=8604ed49a3cde392890b014a8d5a959c8a2fe72a
+            EMSDK_VERSION_QEMU=4.0.10
+            WASM_MEMORY_MIB=1024
+          cache-from: |
+            type=gha,scope=browser-linux-qemu-dependencies
+            type=gha,scope=browser-linux-qemu-proof
+          outputs: type=local,dest=runtime-sources
+      - name: Bind collected sources to the tested runtime
+        run: |
+          python3 tools/compatibility-build/verify-source-runtime.py expected-runtime runtime-sources
+          git archive --format=tar.gz HEAD > runtime-sources/browser-linux-project.tar.gz
+          sha256sum runtime-sources/browser-linux-project.tar.gz >> runtime-sources/SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: browser-linux-runtime-sources
+          path: runtime-sources
+          retention-days: 30
+  guest:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Download exact guest package inventory
+        run: |
+          gh run download "$GUEST_RUN" -R "$GITHUB_REPOSITORY" -n browser-linux-guest-proof -D guest-input
+          (cd guest-input && sha256sum -c SHA256SUMS)
+          mkdir -p tools/compatibility-build/generated/source-input
+          cp guest-input/apk-installed.txt guest-input/apk-repositories.txt guest-input/package-versions.txt guest-input/SHA256SUMS tools/compatibility-build/generated/source-input/
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GUEST_RUN: ${{ inputs.guest_run || '36157834294' }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: tools/compatibility-build
+          file: tools/compatibility-build/guest-sources.Dockerfile
+          outputs: type=local,dest=guest-sources
+      - name: Bind source inventory to the tested guest
+        run: cp guest-input/SHA256SUMS guest-sources/guest-artifact-SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: browser-linux-guest-sources
+          path: guest-sources
+          retention-days: 30
