@@ -2,6 +2,11 @@
 name: Build browser Linux compatibility proof
 on:
   workflow_dispatch:
+    inputs:
+      runtime:
+        description: Build the emulator as well as the guest image
+        type: boolean
+        default: true
   push:
     branches: [feature/portable-compatibility]
     paths:
@@ -10,10 +15,11 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: browser-linux-compatibility-proof
-  cancel-in-progress: true
+  group: browser-linux-compatibility-proof-${{ github.run_id }}
+  cancel-in-progress: false
 jobs:
   compile:
+    if: github.event_name != 'workflow_dispatch' || inputs.runtime
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:

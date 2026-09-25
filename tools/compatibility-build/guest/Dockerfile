@@ -9,9 +9,9 @@ RUN apk add --no-cache \
       font-dejavu && \
     mkdir -p /etc/xdg/weston /usr/local/sbin /usr/share/browser-linux /var/log
 COPY inittab /etc/inittab
-COPY browser-boot browser-weston /usr/local/sbin/
+COPY browser-boot browser-weston verify-wayland /usr/local/sbin/
 COPY weston.ini /etc/xdg/weston/weston.ini
-RUN chmod 755 /usr/local/sbin/browser-boot /usr/local/sbin/browser-weston && \
+RUN chmod 755 /usr/local/sbin/browser-boot /usr/local/sbin/browser-weston /usr/local/sbin/verify-wayland && \
     printf '%s\n' 'browser-linux-wayland' > /etc/hostname && \
     printf '%s\n' 'Local Linux Wayland proof. CPU rendering; guest GPU acceleration unavailable.' > /etc/motd && \
     apk info -v | sort > /usr/share/browser-linux/package-versions.txt && \
@@ -22,11 +22,12 @@ RUN chmod 755 /usr/local/sbin/browser-boot /usr/local/sbin/browser-weston && \
     weston --version && \
     test -f /usr/lib/libweston-14/drm-backend.so && \
     test -x /usr/bin/weston-terminal
+RUN timeout 15 /usr/local/sbin/verify-wayland
 
 FROM alpine:${ALPINE_VERSION} AS image
 RUN apk add --no-cache e2fsprogs
 COPY --from=guest / /rootfs/
-ARG ROOTFS_MIB=256
+ARG ROOTFS_MIB=512
 RUN mkdir /out && \
     cp /rootfs/boot/vmlinuz-virt /out/vmlinuz-virt && \
     cp /rootfs/boot/initramfs-virt /out/initramfs-virt && \
@@ -35,7 +36,8 @@ RUN mkdir /out && \
     truncate -s "${ROOTFS_MIB}M" /out/rootfs.img && \
     mkfs.ext4 -F -L browser-linux -O '^has_journal' -d /rootfs /out/rootfs.img && \
     e2fsck -fn /out/rootfs.img && \
-    cd /out && sha256sum rootfs.img vmlinuz-virt initramfs-virt package-versions.txt > SHA256SUMS
+    gzip -9 -n -c /out/rootfs.img > /out/rootfs.img.gz && \
+    cd /out && sha256sum rootfs.img rootfs.img.gz vmlinuz-virt initramfs-virt package-versions.txt > SHA256SUMS
 
 FROM scratch
 COPY --from=image /out/ /

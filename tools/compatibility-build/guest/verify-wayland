@@ -1,0 +1,33 @@
+#!/bin/sh
+# Run in the isolated image-build container, never on the user's operating system.
+# Proves this package/config combination can run a compositor and Wayland client.
+# Browser graphics, emulated DRM, input and performance still need separate tests.
+set -eu
+export XDG_RUNTIME_DIR=/tmp/wayland-build-proof
+export WAYLAND_DISPLAY=wayland-build-proof
+mkdir -p "$XDG_RUNTIME_DIR"
+chmod 700 "$XDG_RUNTIME_DIR"
+weston --backend=headless --renderer=pixman --shell=desktop-shell.so \
+  --socket="$WAYLAND_DISPLAY" --config=/etc/xdg/weston/weston.ini \
+  --idle-time=0 --log=/tmp/weston-build-proof.log &
+compositor_pid=$!
+client_pid=
+cleanup() {
+  if [ -n "$client_pid" ]; then kill "$client_pid" 2>/dev/null || true; fi
+  kill "$compositor_pid" 2>/dev/null || true
+  cat /tmp/weston-build-proof.log
+}
+trap cleanup EXIT HUP INT TERM
+i=0
+while [ ! -S "$XDG_RUNTIME_DIR/$WAYLAND_DISPLAY" ]; do
+  kill -0 "$compositor_pid"
+  i=$((i + 1))
+  [ "$i" -lt 50 ] || exit 1
+  sleep 0.1
+done
+weston-simple-shm > /tmp/weston-client-build-proof.log 2>&1 &
+client_pid=$!
+sleep 2
+kill -0 "$compositor_pid"
+kill -0 "$client_pid"
+printf 'BROWSER_LINUX_HEADLESS_BUILD_PROOF: compositor and wl_shm client running\n'
