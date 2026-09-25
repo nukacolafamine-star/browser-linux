@@ -78,7 +78,8 @@ def collect(installed, versions, output):
         with tarfile.open(fileobj=io.BytesIO(recipe)) as archive:
             archive.extractall(directory / 'recipe', filter='data')
         working = directory / 'recipe' / package_path
-        env = dict(os.environ, REPODEST=str(directory), SRCDEST='/source-cache', CARCH='x86_64')
+        env = dict(os.environ, REPODEST=str(directory), SRCDEST='/source-cache', CARCH='x86_64',
+                   DISTFILES_MIRROR='https://distfiles.alpinelinux.org/distfiles/v3.21')
         # verify is explicit: srcpkg itself calls fetch but does not verify.
         # Alpine 3.21's sumcheck changes cwd to srcdir; a separate invocation
         # restores startdir before srcpkg packages local install/trigger files.
