@@ -147,8 +147,9 @@ try:
     wait_for(lambda: "BROWSER_LINUX_EXCHANGE_READY" in serial(), 10, "optional in-tab file exchange mounted")
     serial_command("if test \"$(cat /mnt/browser/incoming.txt)\" = 'native exchange input'; then printf 'GUEST_%s\\n' EXCHANGE_READ_OK; fi; printf 'guest exchange output\\n' > /mnt/browser/outgoing.txt")
     wait_for(lambda: "GUEST_EXCHANGE_READ_OK" in serial(), 10, "guest reading the shared exchange")
-    wait_for(lambda: (exchange / "outgoing.txt").exists(), 10, "guest writing the shared exchange")
-    assert (exchange / "outgoing.txt").read_text() == "guest exchange output\n"
+    wait_for(lambda: (exchange / "outgoing.txt").exists() and
+             (exchange / "outgoing.txt").read_bytes() == b"guest exchange output\n",
+             10, "guest completing the shared exchange write")
     report["checks"].append("Virtio 9P exchange verified in both directions with an isolated CI directory")
     if args.java_pack:
         java_results = []
