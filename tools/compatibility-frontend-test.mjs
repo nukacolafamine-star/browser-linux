@@ -12,6 +12,10 @@ const root=fileURLToPath(new URL('../',import.meta.url));
 const temporary=path.join(root,'.cache','tmp'),results=path.join(root,'test-results');
 await Promise.all([fs.mkdir(temporary,{recursive:true}),fs.mkdir(results,{recursive:true})]);
 process.env.TEMP=temporary;process.env.TMP=temporary;
+// Portable Windows WebKit writes auxiliary caches relative to its process cwd,
+// including when userDataDir is explicit. Keep those test files in the project.
+const browserWorkingDirectory=await fs.mkdtemp(path.join(temporary,'frontend-browser-'));
+process.chdir(browserWorkingDirectory);
 const portable=path.join(root,'.cache','playwright-browsers');
 if(!process.env.PLAYWRIGHT_BROWSERS_PATH&&await fs.stat(portable).then(()=>true,()=>false))process.env.PLAYWRIGHT_BROWSERS_PATH=portable;
 const {chromium,webkit}=await import('playwright');
@@ -73,7 +77,7 @@ const server=http.createServer((request,response)=>{
 });
 await new Promise((resolve,reject)=>{server.once('error',reject);server.listen(0,'127.0.0.1',resolve);});
 const base=`http://127.0.0.1:${server.address().port}`;
-const report={startedAt:new Date().toISOString(),scope:'Frontend rejection and worker cleanup only; no real or simulated successful kernel boot',engines:[]};
+const report={startedAt:new Date().toISOString(),browserWorkingDirectory,scope:'Frontend rejection and worker cleanup only; no real or simulated successful kernel boot',engines:[]};
 let browser;
 try{
   for(const [engine,type,options] of [['chrome',chromium,{channel:'chrome'}],['webkit',webkit,{}]]){

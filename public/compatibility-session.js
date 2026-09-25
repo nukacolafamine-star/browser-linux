@@ -283,7 +283,7 @@ async function boot() {
     }
   };
   const args = [
-    '-M', 'pc', '-cpu', 'qemu64,-svm,-vmx', '-m', memory + 'M', '-smp', '1', '-accel', 'tcg,tb-size=64', '-nodefaults',
+    '-M', 'pc,i8042=off', '-cpu', 'qemu64,-svm,-vmx', '-m', memory + 'M', '-smp', '1', '-accel', 'tcg,tb-size=64', '-nodefaults',
     '-L', '/pack', '-nic', 'none', '-monitor', 'none', '-serial', 'stdio', '-parallel', 'none', '-no-reboot',
     ...(exchangeEnabled ? ['-virtfs', 'local,path=/exchange,mount_tag=browser,security_model=mapped-file,id=browser'] : []),
     // Emscripten's random device reads crypto.getRandomValues. Give Linux a
@@ -291,7 +291,7 @@ async function boot() {
     '-object', 'rng-random,id=browser-rng,filename=/dev/urandom',
     '-device', 'virtio-rng-pci,rng=browser-rng',
     '-display', 'sdl,gl=off', '-vga', 'none', '-device', 'virtio-vga',
-    '-device', 'qemu-xhci', '-device', 'usb-tablet', '-device', 'usb-kbd',
+    '-device', 'virtio-keyboard-pci', '-device', 'virtio-tablet-pci',
     '-kernel', '/pack/vmlinuz-virt', '-initrd', '/pack/initramfs-virt',
     '-append', 'console=ttyS0 root=/dev/vda rw rootfstype=ext4 modules=virtio_pci,virtio_blk,ext4 quiet',
     '-drive', 'id=root,file=/pack/rootfs.img,format=raw,if=none',

@@ -1,5 +1,5 @@
 {
-  "version": "0d146b3e7b0fdcf9",
+  "version": "1c07e403b4b152fd",
   "assets": {
     "app.js": {
       "bytes": 19789,
@@ -50,8 +50,8 @@
       "sha256": "184eb0e630a0d95a84fb2b9294e9d49a608edd1cd5705028304a78457246bd04"
     },
     "compatibility-session.js": {
-      "bytes": 18896,
-      "sha256": "3f2285224e9e2c43a5d3d1fdc266630a960cc419c00a916fa5865abc6d44c428"
+      "bytes": 18901,
+      "sha256": "bbbe380bada18382e564d2aaabc3c35e62f670116de582578b30a25b1f04d583"
     },
     "compatibility-storage.js": {
       "bytes": 18183,
