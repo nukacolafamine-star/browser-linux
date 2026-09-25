@@ -476,6 +476,124 @@ static void vc_GetQueryObjectiv(GLuint id, GLenum pname, GLint *params) { GLuint
 static void vc_GetQueryObjectui64v(GLuint id, GLenum pname, uint64_t *params) { GLuint value = 0; glGetQueryObjectuiv(id, pname, &value); *params = value; }
 static void vc_GetQueryObjecti64v(GLuint id, GLenum pname, int64_t *params) { GLuint value = 0; glGetQueryObjectuiv(id, pname, &value); *params = value; }
 
+/* Emscripten's table entries for these take the 64-bit timeout as two 32-bit
+ * halves; callers through libepoxy pass one 64-bit value. WebGL cannot block
+ * in clientWaitSync (its maximum timeout is 0): callers poll, and syncs signal
+ * once this thread returns to the browser's event loop. */
+static GLenum vc_ClientWaitSync(GLsync sync, GLbitfield flags, GLuint64 timeout) { (void)timeout; return glClientWaitSync(sync, flags, 0); }
+static void vc_WaitSync(GLsync sync, GLbitfield flags, GLuint64 timeout) { glWaitSync(sync, flags, timeout); }
+
+/* ---------------------------------------------------------------------- */
+/* Pixel formats and texture parameters that WebGL 2 lacks                 */
+
+#define BGRA_EXT 0x80E1
+#define BGRA8_EXT 0x93A1
+#define SWIZZLE_FIRST 0x8E42 /* GL_TEXTURE_SWIZZLE_R ... _A, then _RGBA */
+#define SWIZZLE_LAST 0x8E46
+
+/* Copies a BGRA client image, laid out as the unpack state describes, into a
+ * tightly packed RGBA image. NULL if the source is a pixel buffer object. */
+static void *bgra_to_rgba(GLsizei width, GLsizei height, const void *pixels)
+{
+    struct vstate *s = cur();
+    if (!pixels || s->pixel_unpack_buffer || width <= 0 || height <= 0) return NULL;
+    size_t row_pixels = s->unpack_row_length > 0 ? (size_t)s->unpack_row_length : (size_t)width;
+    size_t align = s->unpack_alignment > 0 ? (size_t)s->unpack_alignment : 4;
+    size_t stride = (row_pixels * 4 + align - 1) / align * align;
+    const uint8_t *src = (const uint8_t *)pixels + (size_t)s->unpack_skip_rows * stride + (size_t)s->unpack_skip_pixels * 4;
+    uint8_t *out = malloc((size_t)width * (size_t)height * 4), *dst = out;
+    if (!out) return NULL;
+    for (GLsizei y = 0; y < height; y++, src += stride) {
+        for (GLsizei x = 0; x < width; x++, dst += 4) {
+            dst[0] = src[x * 4 + 2]; dst[1] = src[x * 4 + 1]; dst[2] = src[x * 4]; dst[3] = src[x * 4 + 3];
+        }
+    }
+    return out;
+}
+
+/* Uploads a packed image with default unpack state, then restores it. */
+static void packed_unpack(bool begin)
+{
+    struct vstate *s = cur();
+    GLint values[] = {4, 0, 0, 0};
+    const GLenum names[] = {GL_UNPACK_ALIGNMENT, GL_UNPACK_ROW_LENGTH, GL_UNPACK_SKIP_PIXELS, GL_UNPACK_SKIP_ROWS};
+    if (!begin) { values[0] = s->unpack_alignment; values[1] = s->unpack_row_length; values[2] = s->unpack_skip_pixels; values[3] = s->unpack_skip_rows; }
+    for (int i = 0; i < 4; i++) glPixelStorei(names[i], values[i]);
+}
+
+static GLint rgba_internal_format(GLint internal)
+{
+    if (internal == BGRA_EXT) return GL_RGBA;
+    if (internal == BGRA8_EXT) return GL_RGBA8;
+    return internal;
+}
+
+static void vc_TexImage2D(GLenum target, GLint level, GLint internal, GLsizei width, GLsizei height,
+                          GLint border, GLenum format, GLenum type, const void *pixels)
+{
+    if (format != BGRA_EXT || type != GL_UNSIGNED_BYTE) {
+        glTexImage2D(target, level, rgba_internal_format(internal), width, height, border, format, type, pixels);
+        return;
+    }
+    void *rgba = bgra_to_rgba(width, height, pixels);
+    if (rgba) packed_unpack(true);
+    glTexImage2D(target, level, rgba_internal_format(internal), width, height, border, GL_RGBA, type, rgba ? rgba : pixels);
+    if (rgba) { packed_unpack(false); free(rgba); }
+}
+
+static void vc_TexSubImage2D(GLenum target, GLint level, GLint x, GLint y, GLsizei width, GLsizei height,
+                             GLenum format, GLenum type, const void *pixels)
+{
+    if (format != BGRA_EXT || type != GL_UNSIGNED_BYTE) {
+        glTexSubImage2D(target, level, x, y, width, height, format, type, pixels);
+        return;
+    }
+    void *rgba = bgra_to_rgba(width, height, pixels);
+    if (rgba) packed_unpack(true);
+    glTexSubImage2D(target, level, x, y, width, height, GL_RGBA, type, rgba ? rgba : pixels);
+    if (rgba) { packed_unpack(false); free(rgba); }
+}
+
+/* BGRA images are converted when uploaded, so swizzles that only undo the
+ * red/blue order are unnecessary; others cannot be expressed in WebGL 2. */
+static void vc_TexParameteri(GLenum target, GLenum pname, GLint param)
+{
+    if (pname >= SWIZZLE_FIRST && pname <= SWIZZLE_LAST) {
+        if (param != (GLint)(GL_RED + (pname - SWIZZLE_FIRST)) && !(pname == SWIZZLE_FIRST && param == GL_BLUE) &&
+            !(pname == SWIZZLE_FIRST + 2 && param == GL_RED))
+            warn_once("texture swizzle");
+        return;
+    }
+    glTexParameteri(target, pname, param);
+}
+static void vc_TexParameteriv(GLenum target, GLenum pname, const GLint *params)
+{
+    if (pname >= SWIZZLE_FIRST && pname <= SWIZZLE_LAST) {
+        if (pname == SWIZZLE_LAST) warn_once("texture swizzle");
+        else vc_TexParameteri(target, pname, params[0]);
+        return;
+    }
+    glTexParameteriv(target, pname, params);
+}
+
+/* GL errors belong to the virtual context whose call raised them. */
+static GLenum pending_error[MAX_CONTEXTS];
+
+static void collect_errors(int id)
+{
+    for (int i = 0; i < 16; i++) {
+        GLenum error = glGetError();
+        if (error == GL_NO_ERROR) break;
+        if (id >= 0 && !pending_error[id]) pending_error[id] = error;
+    }
+}
+static GLenum vc_GetError(void)
+{
+    GLenum error = pending_error[current_id];
+    if (error) { pending_error[current_id] = GL_NO_ERROR; return error; }
+    return glGetError();
+}
+
 /* ---------------------------------------------------------------------- */
 /* Virtual contexts                                                        */
 
@@ -588,7 +706,9 @@ void epoxy_webgl_make_current(int id)
 {
     if (id < 0 || id >= MAX_CONTEXTS || !contexts[id] || id == current_id) return;
     struct vstate *from = cur();
+    collect_errors(current_id);
     apply(from, contexts[id]);
+    collect_errors(-1); /* restoring state must not report errors */
     current_id = id;
 }
 
@@ -598,6 +718,7 @@ void epoxy_webgl_context_destroy(int id)
     if (id == current_id) epoxy_webgl_make_current(0);
     free(contexts[id]);
     contexts[id] = NULL;
+    pending_error[id] = GL_NO_ERROR;
 }
 
 int epoxy_webgl_current_context(void) { return current_id; }
@@ -635,6 +756,9 @@ static const struct entry compat[] = {
     E("glGetQueryObjectuiv", vc_GetQueryObjectuiv), E("glGetQueryObjectiv", vc_GetQueryObjectiv),
     E("glGetQueryObjectui64v", vc_GetQueryObjectui64v), E("glGetQueryObjecti64v", vc_GetQueryObjecti64v),
     E("glGetBufferSubData", glGetBufferSubData),
+    E("glClientWaitSync", vc_ClientWaitSync), E("glWaitSync", vc_WaitSync), E("glGetError", vc_GetError),
+    E("glTexImage2D", vc_TexImage2D), E("glTexSubImage2D", vc_TexSubImage2D),
+    E("glTexParameteri", vc_TexParameteri), E("glTexParameteriv", vc_TexParameteriv),
     /* EGL, linked statically by Emscripten */
     E("eglBindAPI", eglBindAPI), E("eglChooseConfig", eglChooseConfig), E("eglCreateContext", eglCreateContext),
     E("eglCreateWindowSurface", eglCreateWindowSurface), E("eglDestroyContext", eglDestroyContext), E("eglDestroySurface", eglDestroySurface),

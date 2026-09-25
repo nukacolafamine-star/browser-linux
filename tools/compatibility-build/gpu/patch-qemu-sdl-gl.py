@@ -84,3 +84,34 @@ replace("""    assert(scon->opengl);
 
 path.write_text(source)
 print(f"patched QEMU SDL OpenGL display for virtual contexts ({sites} window switches)")
+
+# The display renders with WebGL in QEMU's main loop thread. A browser
+# presents a worker's OffscreenCanvas, and signals WebGL sync objects (the
+# guest's GPU fences), only between tasks, so the main loop must return to the
+# event loop regularly. Asyncify suspends the thread while it does.
+path = pathlib.Path(sys.argv[1]) / "util" / "qemu-timer.c"
+source = path.read_text()
+replace("""#define QEMU_EMSCRIPTEN_IDLE_NS 1000000
+#endif
+""", """#define QEMU_EMSCRIPTEN_IDLE_NS 1000000
+#include <emscripten.h>
+#include "qemu/coroutine.h"
+
+static void qemu_emscripten_yield(void)
+{
+    static int64_t last;
+    int64_t now = get_clock();
+
+    if (now - last >= 16 * SCALE_MS && !qemu_in_coroutine()) {
+        last = now;
+        emscripten_sleep(0);
+    }
+}
+#endif
+""")
+replace("""    int ret = poll((struct pollfd *)fds, nfds, 0);
+""", """    qemu_emscripten_yield();
+    int ret = poll((struct pollfd *)fds, nfds, 0);
+""")
+path.write_text(source)
+print("QEMU's main loop now yields to the browser about 60 times a second")
