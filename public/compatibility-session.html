@@ -2,11 +2,15 @@
 <html lang="en">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Linux session</title><link rel="stylesheet" href="assets/xterm.css"><link rel="stylesheet" href="style.css"><link rel="stylesheet" href="compatibility.css"></head>
 <body class="guest-page">
-  <div class="guest-toolbar"><button id="show-desktop">Wayland desktop</button><button id="show-console">Serial terminal</button><button id="save-disk" disabled hidden>Shut down &amp; save</button><span id="guest-status" role="status">Preparing Linux…</span></div>
+  <div class="guest-toolbar">
+    <button id="show-desktop" aria-pressed="true">Desktop</button><button id="show-console" aria-pressed="false">Serial terminal</button><button id="fullscreen">Full screen</button><button id="game-mouse" disabled aria-pressed="false" title="Capture the mouse for games such as Minecraft. Press Esc to release it.">Game mouse</button><button id="shutdown" disabled>Shut down</button>
+    <span id="guest-status" role="status">Preparing Linux…</span>
+  </div>
   <p id="disk-note" class="muted"></p>
-  <div id="desktop-panel" class="guest-display"><canvas id="canvas" tabindex="0" width="800" height="600" aria-label="Linux Wayland desktop"></canvas></div>
+  <div id="desktop-panel" class="guest-display"><canvas id="canvas" tabindex="0" width="1280" height="720" aria-label="Linux desktop. Click to type into Linux."></canvas></div>
+  <p id="disk-status" class="muted" role="status"></p>
   <div id="console-panel"><div id="guest-terminal"></div><div class="key-strip" aria-label="Terminal special keys"><button data-input="escape">Esc</button><button data-input="tab">Tab</button><button data-input="interrupt">Ctrl+C</button><button data-input="up">↑</button><button data-input="down">↓</button></div></div>
-  <details id="exchange-panel"><summary>Transfer files</summary><p class="muted">Files here are available in Linux at <code>/mnt/browser</code>. Copy them into the Linux disk before saving. The exchange itself is temporary; it holds up to 64 MiB.</p><div class="button-row"><button id="exchange-upload" disabled>Add files</button><button id="exchange-refresh" disabled>Refresh</button></div><input id="exchange-input" type="file" multiple hidden><p id="exchange-status" role="status"></p><ul id="exchange-files"></ul></details>
+  <details id="exchange-panel"><summary>Transfer files</summary><p class="muted">Files added here appear in Linux at <code>/mnt/browser</code>, and files Linux saves there can be downloaded. The exchange is temporary and holds up to 64 MiB; copy files into your home folder to keep them.</p><div class="button-row"><button id="exchange-upload" disabled>Add files</button><button id="exchange-refresh" disabled>Refresh</button></div><input id="exchange-input" type="file" multiple hidden><p id="exchange-status" role="status"></p><ul id="exchange-files"></ul></details>
   <details><summary>Engine log</summary><pre id="engine-log" class="guest-log"></pre></details>
   <script src="assets/xterm.js"></script><script src="assets/addon-fit.js"></script><script type="module" src="compatibility-session.js"></script>
 </body>

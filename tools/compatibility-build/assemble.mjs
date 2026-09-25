@@ -1,57 +1,91 @@
 // SPDX-License-Identifier: GPL-2.0-only
-// Assemble successful isolated CI artifacts. Never manufactures a passing test.
+// Assemble successful isolated CI artifacts into a versioned, verified build
+// under public/compatibility/. Never manufactures a passing test.
+//   node tools/compatibility-build/assemble.mjs RUNTIME_ARTIFACT DESKTOP_ARTIFACT [--move-chunks]
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {createHash} from 'node:crypto';
-import {gzipSync} from 'node:zlib';
+
 const project = fileURLToPath(new URL('../../', import.meta.url));
-const [runtimeArg, guestArg] = process.argv.slice(2);
-if (!runtimeArg || !guestArg) throw new Error('Usage: node tools/compatibility-build/assemble.mjs RUNTIME_ARTIFACT GUEST_ARTIFACT');
-const runtime = path.resolve(runtimeArg), guest = path.resolve(guestArg);
-const output = path.join(project, '.cache/compatibility-assembly', String(Date.now()));
+const args = process.argv.slice(2);
+const moveChunks = args.includes('--move-chunks');
+const [runtimeArg, desktopArg] = args.filter(arg => !arg.startsWith('--'));
+if (!runtimeArg || !desktopArg) throw new Error('Usage: node tools/compatibility-build/assemble.mjs RUNTIME_ARTIFACT DESKTOP_ARTIFACT [--move-chunks]');
+const runtime = path.resolve(runtimeArg), desktop = path.resolve(desktopArg);
 const destination = path.join(project, 'public/compatibility');
+const staging = path.join(destination, 'builds', '.staging-' + Date.now());
 const hash = bytes => createHash('sha256').update(bytes).digest('hex');
 const files = [];
-await fs.mkdir(output, {recursive: true});
-async function copy(input, name, role, guestPath, compress = false) {
-  const raw = await fs.readFile(input);
-  const bytes = compress ? gzipSync(raw, {level: 6}) : raw;
-  await fs.mkdir(path.dirname(path.join(output, name)), {recursive: true});
-  await fs.writeFile(path.join(output, name), bytes);
-  files.push({name, role, bytes: bytes.length, sha256: hash(bytes),
-    ...(guestPath ? {guestPath} : {}),
-    ...(compress ? {encoding: 'gzip', unpackedBytes: raw.length, unpackedSha256: hash(raw)} : {})});
+
+async function add(input, name, role, guestPath) {
+  const bytes = await fs.readFile(input);
+  await fs.mkdir(path.dirname(path.join(staging, name)), {recursive: true});
+  await fs.writeFile(path.join(staging, name), bytes);
+  files.push({name, role, bytes: bytes.length, sha256: hash(bytes), ...(guestPath ? {guestPath} : {})});
 }
-await copy(path.join(runtime, 'runtime/qemu-system-x86_64.js'), 'runtime/qemu-system-x86_64.js', 'script');
-await copy(path.join(runtime, 'runtime/qemu-system-x86_64.wasm'), 'runtime/qemu-system-x86_64.wasm', 'wasm');
-await copy(path.join(runtime, 'runtime/vendor/xterm-pty.js'), 'runtime/vendor/xterm-pty.js', 'pty');
-for (const name of await fs.readdir(path.join(runtime, 'runtime'))) {
-  if (name.endsWith('.worker.js')) await copy(path.join(runtime, 'runtime', name), 'runtime/' + name, 'worker');
+
+// Verify the guest artifact's own checksum list before using it.
+const sums = (await fs.readFile(path.join(desktop, 'SHA256SUMS'), 'utf8')).trim().split('\n');
+for (const line of sums) {
+  const [expected, name] = line.split(/\s+/);
+  if (hash(await fs.readFile(path.join(desktop, name))) !== expected) throw new Error('Guest artifact checksum mismatch: ' + name);
 }
-for (const name of ['bios-256k.bin', 'vgabios-stdvga.bin', 'vgabios-virtio.bin', 'kvmvapic.bin', 'linuxboot_dma.bin', 'efi-virtio.rom']) {
-  await copy(path.join(runtime, 'pack', name), 'pack/' + name, 'rom', '/pack/' + name);
+const proof = JSON.parse(await fs.readFile(path.join(desktop, 'native-proof/report.json'), 'utf8').catch(() => '{}'));
+if (proof.passed !== true) throw new Error('The desktop artifact did not pass its native verification; refusing to assemble it.');
+
+await fs.mkdir(staging, {recursive: true});
+await add(path.join(runtime, 'runtime/qemu-system-x86_64.js'), 'runtime/qemu-system-x86_64.js', 'script');
+await add(path.join(runtime, 'runtime/qemu-system-x86_64.wasm'), 'runtime/qemu-system-x86_64.wasm', 'wasm');
+await add(path.join(runtime, 'runtime/vendor/xterm-pty.js'), 'runtime/vendor/xterm-pty.js', 'pty');
+for (const name of ['bios-256k.bin', 'vgabios-virtio.bin', 'kvmvapic.bin', 'linuxboot_dma.bin', 'efi-virtio.rom']) {
+  await add(path.join(runtime, 'pack', name), 'pack/' + name, 'rom', '/pack/' + name);
 }
-await copy(path.join(guest, 'vmlinuz-virt'), 'pack/vmlinuz-virt', 'kernel', '/pack/vmlinuz-virt');
-await copy(path.join(guest, 'initramfs-virt'), 'pack/initramfs-virt', 'initrd', '/pack/initramfs-virt');
-await copy(path.join(guest, 'rootfs.img'), 'pack/rootfs.img.gz', 'disk', '/pack/rootfs.img', true);
-await fs.cp(path.join(runtime, 'provenance'), path.join(output, 'provenance'), {recursive: true});
-await fs.copyFile(path.join(guest, 'package-versions.txt'), path.join(output, 'provenance/guest-packages.txt'));
-const shutdown = JSON.parse(await fs.readFile(path.join(runtime, 'provenance/shutdown.json'), 'utf8').catch(() => '{}'));
-const guestCapabilities = JSON.parse(await fs.readFile(path.join(guest, 'guest-capabilities.json'), 'utf8').catch(() => '{}'));
-const cleanShutdown = shutdown.exitRuntime === true && guestCapabilities.shutdown === 'pid1-control-file'
-  && guestCapabilities.exchange === 'virtio-9p';
-if (guestCapabilities.schema) await fs.writeFile(path.join(output, 'provenance/guest-capabilities.json'), JSON.stringify(guestCapabilities, null, 2) + '\n');
+await add(path.join(desktop, 'bzImage'), 'pack/bzImage', 'kernel', '/pack/bzImage');
+
+// Disk chunks are content-addressed; their hashes are checked by the browser
+// when each is first read. Verify the list and each file's size here.
+const diskJsonBytes = await fs.readFile(path.join(desktop, 'disk/disk.json'));
+const diskManifest = JSON.parse(diskJsonBytes);
+await fs.mkdir(path.join(staging, 'disk/chunks'), {recursive: true});
+const seen = new Set();
+let downloadBytes = 0;
+for (const [, digest, bytes] of diskManifest.chunks) {
+  if (seen.has(digest)) continue;
+  seen.add(digest);
+  const source = path.join(desktop, 'disk/chunks', digest + '.gz'), target = path.join(staging, 'disk/chunks', digest + '.gz');
+  const stat = await fs.stat(source);
+  if (stat.size !== bytes) throw new Error('Disk chunk has the wrong size: ' + digest);
+  if (moveChunks) await fs.rename(source, target); else await fs.copyFile(source, target);
+  downloadBytes += bytes;
+}
+await fs.writeFile(path.join(staging, 'disk/disk.json'), diskJsonBytes);
+
+await fs.cp(path.join(runtime, 'provenance'), path.join(staging, 'provenance/runtime'), {recursive: true});
+for (const name of ['packages.txt', 'apt-sources.txt', 'guest-capabilities.json', 'kernel.config', 'kernel-release.txt', 'disk-stats.json', 'SHA256SUMS']) {
+  await fs.copyFile(path.join(desktop, name), path.join(staging, 'provenance/guest-' + name)).catch(() => {});
+}
+await fs.writeFile(path.join(staging, 'provenance/guest-native-proof.json'), JSON.stringify(proof, null, 2) + '\n');
+const guest = JSON.parse(await fs.readFile(path.join(desktop, 'guest-capabilities.json'), 'utf8'));
+const memory = JSON.parse(await fs.readFile(path.join(runtime, 'provenance/memory.json'), 'utf8').catch(() => '{}'));
+
+const diskSha = hash(diskJsonBytes);
+const build = hash(Buffer.from(JSON.stringify(files) + diskSha)).slice(0, 16);
+const prefix = `builds/${build}/`;
 const manifest = {
-  schema: 1, name: 'Alpine Linux / Weston compatibility proof', architecture: 'x86_64',
-  build: hash(Buffer.from(JSON.stringify(files))).slice(0, 16), engineMemoryMiB: 1024,
-  description: 'A full x86-64 Linux guest with the Weston Wayland compositor and a terminal. Guest graphics use CPU rendering. Networking, Java and Minecraft are not included in this proof.',
-  guestAcceleration: false, persistentDisk: cleanShutdown, cleanShutdown, networking: false,
-  files,
+  schema: 2, name: 'Debian 13 desktop', architecture: 'x86_64', build,
+  description: `Debian 13 with the Weston Wayland desktop, Xwayland for X11 programs, apt, and Linux ${guest.kernel}. `
+    + 'Programs run on an emulated x86-64 processor with CPU-rendered graphics. The official Minecraft Launcher can be installed from Mojang inside Linux.',
+  engine: {maximumMemoryMiB: memory.maximumMiB || 4096},
+  guest,
+  files: files.map(file => ({...file, name: prefix + file.name})),
+  disk: {name: prefix + 'disk/disk.json', bytes: diskJsonBytes.length, sha256: diskSha, size: diskManifest.size,
+    chunkSize: diskManifest.chunkSize, chunks: diskManifest.chunks.length, downloadBytes},
+  verification: {nativeDesktopSeconds: proof.desktopSeconds, openGL: proof.openGL, launcher: proof.launcher ? {opened: proof.launcher.opened} : undefined},
 };
-// Versioned URLs prevent a Pages update during download from mixing runtimes.
-await fs.mkdir(destination, {recursive: true});
-await fs.cp(output, path.join(destination, 'builds', manifest.build), {recursive: true});
-for (const file of files) file.name = `builds/${manifest.build}/` + file.name;
+const final = path.join(destination, 'builds', build);
+await fs.rm(final, {recursive: true, force: true});
+await fs.rename(staging, final);
 await fs.writeFile(path.join(destination, 'manifest.json'), JSON.stringify(manifest, null, 2) + '\n');
-console.log(JSON.stringify({build: manifest.build, downloadMiB: files.reduce((sum, file) => sum + file.bytes, 0) / 1048576, files: files.length}));
+console.log(JSON.stringify({build, startMiB: (files.reduce((sum, file) => sum + file.bytes, 0) / 1048576).toFixed(1),
+  diskChunks: diskManifest.chunks.length, diskDownloadMiB: (downloadBytes / 1048576).toFixed(1)}));

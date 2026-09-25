@@ -1,12 +1,13 @@
 diff --git a/util/qemu-timer.c b/util/qemu-timer.c
-index 6a0de33..a2b4de3 100644
+index 6a0de33..fdc440a 100644
 --- a/util/qemu-timer.c
 +++ b/util/qemu-timer.c
-@@ -332,9 +332,32 @@ int qemu_timeout_ns_to_ms(int64_t ns)
+@@ -332,9 +332,33 @@ int qemu_timeout_ns_to_ms(int64_t ns)
  /* qemu implementation of g_poll which uses a nanosecond timeout but is
   * otherwise identical to g_poll
   */
 +#ifdef __EMSCRIPTEN__
++#include <poll.h>
 +/* Longest idle sleep before looking for file descriptor events again. */
 +#define QEMU_EMSCRIPTEN_IDLE_NS 1000000
 +#endif
