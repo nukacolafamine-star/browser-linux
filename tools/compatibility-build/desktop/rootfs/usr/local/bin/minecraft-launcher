@@ -6,7 +6,7 @@
 set -euo pipefail
 # Certificate authorities are looked up by hash (see /etc/profile.d/browser-linux.sh):
 # Mojang's servers drop TLS handshakes that take longer than about 5 seconds.
-export SSL_CERT_FILE=/etc/ssl/browser-linux-no-bundle.pem SSL_CERT_DIR=/etc/ssl/certs
+export SSL_CERT_FILE=/etc/ssl/browser-linux-ca.pem SSL_CERT_DIR=/etc/ssl/certs
 
 url=https://launcher.mojang.com/download/Minecraft.tar.gz
 # Linux launcher bootstrap published on 2026-09-25 (1,102,510 bytes), as pinned
@@ -47,4 +47,7 @@ cd "$HOME"
 # Mojang ships and the distribution packages run the launcher as an X11
 # program; Weston provides X11 through Xwayland.
 export GDK_BACKEND=x11
+# The launcher's own TLS (libcurl) loads the whole certificate bundle for each
+# connection; this looks authorities up in /etc/ssl/certs instead (fast-ca.c).
+export LD_PRELOAD=/usr/local/lib/browser-linux/libbrowser-linux-fast-ca.so${LD_PRELOAD:+:$LD_PRELOAD}
 exec "$launcher" --workDir "$HOME/.minecraft" "$@"

@@ -13,7 +13,9 @@ ARG WASM_MAXIMUM_MEMORY_PAGES=65535
 # pointers above 2 GiB as unsigned in the JIT's JavaScript glue.
 # Emscripten 4.0.10's socket recvmsg() misplaced scatter/gather data, which
 # corrupted disk reads that QEMU's NBD client splits across guest pages.
-COPY patch-emscripten.py /tmp/patch-emscripten.py
+# patch-ffi-glue.py runs after linking: libffi's JavaScript glue indexed the
+# heap with signed shifts, which broke helper calls once memory passed 2 GiB.
+COPY patch-emscripten.py patch-ffi-glue.py /tmp/
 RUN python3 /tmp/patch-emscripten.py /emsdk/upstream/emscripten
 COPY patches/qemu/ /tmp/qemu-patches/
 RUN cd /qemu && for patch in /tmp/qemu-patches/*.patch; do \
@@ -44,7 +46,8 @@ RUN EXTRA_CFLAGS="-O3 -g2 -Wno-error=unused-command-line-argument -Wno-error=unu
       --without-default-features --enable-system --with-coroutine=fiber --enable-virtfs --enable-sdl --enable-pixman \
       --extra-cflags="$EXTRA_CFLAGS" --extra-cxxflags="$EXTRA_CFLAGS" \
       --extra-ldflags="-sEXPORTED_RUNTIME_METHODS=addFunction,removeFunction,TTY,FS,callMain,ENV" && \
-    emmake make -j 3 qemu-system-x86_64
+    emmake make -j 3 qemu-system-x86_64 && \
+    python3 /tmp/patch-ffi-glue.py qemu-system-x86_64
 
 RUN mkdir -p /out/runtime/vendor /out/pack /out/provenance /out/sources && \
     cp qemu-system-x86_64 /out/runtime/qemu-system-x86_64.js && \

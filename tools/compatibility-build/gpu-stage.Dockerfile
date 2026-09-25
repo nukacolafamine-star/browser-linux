@@ -48,6 +48,7 @@ RUN python3 /tmp/gpu/patch-qemu-sdl-gl.py /qemu && rm -rf /qemu/build-gpu && mkd
       --extra-ldflags="-sEXPORTED_RUNTIME_METHODS=addFunction,removeFunction,TTY,FS,callMain,ENV -lGL -lEGL" && \
     emmake make -j 3 qemu-system-x86_64 && \
     python3 /tmp/gpu/unproxy-egl.py qemu-system-x86_64 && \
+    python3 /tmp/patch-ffi-glue.py qemu-system-x86_64 && \
     mkdir -p /out-gpu/runtime/vendor /out-gpu/provenance /out-gpu/sources && \
     cp qemu-system-x86_64 /out-gpu/runtime/qemu-system-x86_64.js && \
     cp qemu-system-x86_64.wasm /out-gpu/runtime/ && \
