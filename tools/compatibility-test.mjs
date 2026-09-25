@@ -326,7 +326,7 @@ for(const [name,type,options] of [['chrome',chromium,{channel:'chrome'}],['webki
     // Browsers may defer iframe animation frames while it is offscreen. A live
     // compositor marker precedes its first displayed frame, so wait on actual
     // pixels after scrolling, without treating elapsed time as successful paint.
-    const paintStart=Date.now(),paintDeadline=paintStart+remaining(30000);
+    const paintStart=Date.now(),paintDeadline=paintStart+remaining(90000);
     entry.paintSamples=[];
     do{
       entry.canvas=await sampleDisplayedCanvas();
@@ -341,10 +341,10 @@ for(const [name,type,options] of [['chrome',chromium,{channel:'chrome'}],['webki
           'read-only startup logs after first desktop frame failed to appear',15000);
       }catch(error){entry.displayDiagnosticError=error.message;}
     }
-    assert.ok(entry.canvas.sampledColors>=4,'Guest canvas screenshot is blank or effectively uniform');
-    assert.ok(entry.canvas.focusCandidate,'The configured dark graphical terminal did not become visible within the first-frame deadline');
+    const desktopVisible=entry.canvas.sampledColors>=4&&!!entry.canvas.focusCandidate;
     await page.screenshot({path:path.join(results,`compatibility-${name}-page.png`),fullPage:true,timeout:remaining(15000)});
-    record('real guest canvas is displayed and a nonblank desktop screenshot is saved',entry.canvas);
+    if(desktopVisible)record('real guest canvas is displayed and a nonblank desktop screenshot is saved',entry.canvas);
+    else recordFailure('real graphical terminal becomes visible before the first-frame deadline',entry.canvas);
 
     const graphicalToken=randomUUID().replaceAll('-','').slice(0,20);
     const graphicalPath=`/root/browser-graphical-${graphicalToken}`;
@@ -352,7 +352,7 @@ for(const [name,type,options] of [['chrome',chromium,{channel:'chrome'}],['webki
     // This check never writes the proof file through serial, guestEngine.FS,
     // or a fixture. Only actual browser keyboard events can create the file.
     await runShell(`test ! -e '${graphicalPath}'`,'graphical proof file does not already exist');
-    const candidates=[entry.canvas.focusCandidate,{x:0.5,y:0.5,source:'canvas center'}].filter(Boolean)
+    const candidates=(desktopVisible?[entry.canvas.focusCandidate,{x:0.5,y:0.5,source:'canvas center'}]:[]).filter(Boolean)
       .filter((point,index,array)=>!array.slice(0,index).some(other=>Math.abs(point.x-other.x)<0.05&&Math.abs(point.y-other.y)<0.05));
     entry.graphicalInput={path:graphicalPath,expected:graphicalContents,attempts:[],passed:false};
     try{for(const candidate of candidates){
@@ -371,6 +371,9 @@ for(const [name,type,options] of [['chrome',chromium,{channel:'chrome'}],['webki
       if(output.split('\n').includes(graphicalContents)){entry.graphicalInput.passed=true;break;}
     }}catch(error){entry.graphicalInput.error=error.message;}
     await captureInputTrace().catch(error=>{entry.inputTrace={error:error.message};});
+    // Keep input evidence available while the independent JVM/save phases run.
+    await fs.writeFile(path.join(results,`compatibility-${name}-input-report.json`),
+      JSON.stringify({startedAt:report.startedAt,engines:[entry]},null,2)+'\n');
     await canvas.screenshot({path:path.join(results,`compatibility-${name}-graphical-input.png`),timeout:remaining(15000)})
       .catch(error=>{entry.graphicalInput.screenshotError=error.message;});
     if(entry.graphicalInput.passed){

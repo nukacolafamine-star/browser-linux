@@ -77,6 +77,7 @@ $('start-compatibility').onclick = () => {
   frame.src = `compatibility-session.html?memory=${Number($('guest-memory').value)}&disk=${encodeURIComponent($('disk-mode').value)}`;
   // Development diagnostics can isolate the optional virtual file device.
   if (new URLSearchParams(location.search).get('exchange') === 'off') frame.src += '&exchange=off';
+  if (new URLSearchParams(location.search).get('input-trace') === '1') frame.src += '&input-trace=1';
   $('session-container').append(frame);
   // Keep the guest visible during startup. Browsers can throttle rendering in
   // offscreen frames; the user should see the desktop as it first paints.

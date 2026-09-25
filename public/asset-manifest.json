@@ -1,5 +1,5 @@
 {
-  "version": "1c07e403b4b152fd",
+  "version": "eac4679e610fe9e0",
   "assets": {
     "app.js": {
       "bytes": 19789,
@@ -45,13 +45,17 @@
       "bytes": 2724,
       "sha256": "93fc1a23c4862da15ce44347697bb46fcb32e834c10d1de0ff4c3042bcd787d8"
     },
+    "compatibility-input.js": {
+      "bytes": 1579,
+      "sha256": "5eee218778f936df6920b4008c8eec36eb24df39e38c9fff51175a2811cb6d8f"
+    },
     "compatibility-session.html": {
       "bytes": 1901,
       "sha256": "184eb0e630a0d95a84fb2b9294e9d49a608edd1cd5705028304a78457246bd04"
     },
     "compatibility-session.js": {
-      "bytes": 18901,
-      "sha256": "bbbe380bada18382e564d2aaabc3c35e62f670116de582578b30a25b1f04d583"
+      "bytes": 20025,
+      "sha256": "e5210a59c5e45dd604ab37653a679acae79424ea9094a24d8d56d47eb592c5ef"
     },
     "compatibility-storage.js": {
       "bytes": 18183,
@@ -66,8 +70,8 @@
       "sha256": "b6c96de7f285672cb87e1b06aaeca3db0299915b55cb16d2ca2a5e1385c5ea61"
     },
     "compatibility.js": {
-      "bytes": 6164,
-      "sha256": "2fcc917898c3fd16445aeb38a0607fe3485dbfa10c5c23e6103479b2c954bed4"
+      "bytes": 6266,
+      "sha256": "f8f449f9cac04c01a1dda74c3e4a2e56d759542c808959b2171e6f773eb83226"
     },
     "icon.svg": {
       "bytes": 251,

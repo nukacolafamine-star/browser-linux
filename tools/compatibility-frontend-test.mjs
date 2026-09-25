@@ -54,7 +54,7 @@ fixture('partial-init-failure',()=>{},/INTENTIONAL_PARTIAL_INIT_FAILURE/);
 fixture('cached-runtime-origin-unavailable',()=>{},/INTENTIONAL_PARTIAL_INIT_FAILURE/);
 fixtures.get('cached-runtime-origin-unavailable').cacheOnly=true;
 
-const staticNames=['compatibility-session.html','compatibility-session.js','compatibility-storage.js','compatibility-images.js','compatibility-exchange.js','capabilities.js','capability-worker.js',
+const staticNames=['compatibility-session.html','compatibility-session.js','compatibility-storage.js','compatibility-images.js','compatibility-exchange.js','compatibility-input.js','capabilities.js','capability-worker.js',
   'assets/xterm.js','assets/addon-fit.js','assets/xterm.css','style.css','compatibility.css'];
 const staticFiles=new Map(await Promise.all(staticNames.map(async name=>[name,await fs.readFile(path.join(root,'public',name))])));
 const server=http.createServer((request,response)=>{

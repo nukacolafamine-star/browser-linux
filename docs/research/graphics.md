@@ -1,6 +1,6 @@
 # Local Linux graphics: implementation evidence and next proof
 
-Research date: 2026-09-25. This note describes source inspection and a proposed build. It does **not** claim that the new guest has booted or that guest 3D acceleration works.
+Research date: 2026-09-25. The x86-64 guest and a visible Weston desktop now run in a browser. Graphical keyboard acceptance is still failing; guest 3D acceleration is not implemented. See [current build evidence](../COMPATIBILITY.md) for the tested artifacts and remaining gates.
 
 ## Recommended proof
 
@@ -12,15 +12,19 @@ The guest recipe is in [guest/Dockerfile](../../tools/compatibility-build/guest/
 
 The actual `linux-virt-6.12.111-r0.apk` from the official Alpine 3.21 x86_64 repository was inspected. Its kernel config enables `CONFIG_DRM_VIRTIO_GPU=m`, `CONFIG_DRM_BOCHS=m`, `CONFIG_INPUT_EVDEV=m`, `CONFIG_VIRTIO_BLK=m`, and `CONFIG_EXT4_FS=m`. The guest build rechecks the virtio GPU setting. Sources: [Alpine package index](https://dl-cdn.alpinelinux.org/alpine/v3.21/main/x86_64/), [Weston package recipe](https://github.com/alpinelinux/aports/blob/3.21-stable/community/weston/APKBUILD).
 
-Initial QEMU arguments, subject to real boot validation:
+Current virtual hardware (the complete arguments live in `public/compatibility-session.js`):
 
 ```text
--M pc -m 512M -smp 1 -accel tcg,tb-size=64,thread=single
+-M pc,i8042=off -cpu qemu64,-svm,-vmx -m 512M -smp 1
+-accel tcg,tb-size=64 -nodefaults
 -kernel /pack/vmlinuz-virt -initrd /pack/initramfs-virt
 -drive file=/pack/rootfs.img,if=virtio,format=raw
 -append "console=ttyS0,115200 root=/dev/vda rootfstype=ext4 rw"
 -L /pack -vga none -device virtio-vga -display sdl,gl=off
--serial mon:stdio -nic none
+-device virtio-keyboard-pci -device virtio-tablet-pci
+-object rng-random,id=browser-rng,filename=/dev/urandom
+-device virtio-rng-pci,rng=browser-rng
+-serial stdio -parallel none -monitor none -nic none
 ```
 
 `browser.graphics=off` on the guest command line disables graphical startup for serial debugging. Guest logs go to `/var/log/{browser-weston,weston,weston-terminal,seatd}.log`. Serial messages identify kernel boot, serial readiness, compositor socket creation and client process launch; the latter is not a substitute for verifying a rendered frame and responsive input.

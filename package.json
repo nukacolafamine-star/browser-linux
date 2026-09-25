@@ -16,7 +16,8 @@
     "test:compatibility": "node tools/compatibility-test.mjs",
     "test:compatibility:frontend": "node tools/compatibility-frontend-test.mjs",
     "test:compatibility:storage": "node tools/compatibility-storage-test.mjs",
-    "test:compatibility:images": "node tools/compatibility-images-test.mjs"
+    "test:compatibility:images": "node tools/compatibility-images-test.mjs",
+    "test:compatibility:input": "node tools/compatibility-input-test.mjs"
   },
   "dependencies": {
     "@xterm/xterm": "6.0.0",

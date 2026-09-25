@@ -3,6 +3,7 @@ import {detectCapabilities, missingRequirements} from './capabilities.js';
 import {DiskStore, makeBaseMetadata} from './compatibility-storage.js';
 import {loadCompatibilityImage, imageResponse, retainImageFile, retainImageManifest} from './compatibility-images.js';
 import {connectExchange} from './compatibility-exchange.js';
+import {connectCanvasKeyboard} from './compatibility-input.js';
 const $ = id => document.getElementById(id);
 const base = new URL('./compatibility/', location.href);
 const started = performance.now();
@@ -20,6 +21,18 @@ function moduleURL(bytes) {
 function releaseModules() {for (const url of moduleURLs.splice(0)) URL.revokeObjectURL(url);}
 const options = new URLSearchParams(location.search);
 const exchangeEnabled = options.get('exchange') !== 'off';
+const inputTrace = options.get('input-trace') === '1';
+const disconnectKeyboard = connectCanvasKeyboard($('canvas'));
+if (inputTrace) {
+  // Explicit development diagnostics only. Ordinary sessions never record keys.
+  report.inputEvents = [];
+  for (const type of ['keydown', 'keyup']) window.addEventListener(type, event => {
+    if (document.activeElement !== $('canvas')) return;
+    report.inputEvents.push({type, code: event.code, shift: event.shiftKey, control: event.ctrlKey,
+      repeat: event.repeat, ms: Math.round(performance.now() - started)});
+    if (report.inputEvents.length > 600) report.inputEvents.shift();
+  }, true);
+}
 const workers = new Set();
 const NativeWorker = window.Worker;
 // Every worker in this dedicated session belongs to this guest. Retain handles
@@ -36,10 +49,10 @@ function status(message, state = report.state) {
   if (parent !== window) parent.postMessage({type: 'guest-status', message, state}, location.origin);
 }
 function log(message) {
-  report.logs.push(String(message)); if (report.logs.length > 250) report.logs.shift();
+  report.logs.push(String(message)); if (report.logs.length > (inputTrace ? 1500 : 250)) report.logs.shift();
   $('engine-log').textContent = report.logs.join('\n');
 }
-function fail(error) {clearTimeout(bootTimer); clearTimeout(shutdownTimer); stopWorkers(); releaseModules(); $('save-disk').disabled = true; log(error?.stack || error); status('Linux session stopped: ' + (error?.message || error), 'error');}
+function fail(error) {disconnectKeyboard(); clearTimeout(bootTimer); clearTimeout(shutdownTimer); stopWorkers(); releaseModules(); $('save-disk').disabled = true; log(error?.stack || error); status('Linux session stopped: ' + (error?.message || error), 'error');}
 const sha256 = async bytes => Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)), byte => byte.toString(16).padStart(2, '0')).join('');
 function safeURL(name) {
   const url = new URL(name, base);
@@ -100,7 +113,7 @@ const keys = {escape: '\x1b', tab: '\t', interrupt: '\x03', up: '\x1b[A', down: 
 document.querySelectorAll('[data-input]').forEach(button => button.onclick = () => {term?.input(keys[button.dataset.input], true); term?.focus();});
 window.addEventListener('error', event => fail(new Error(event.message)));
 window.addEventListener('unhandledrejection', event => fail(event.reason));
-window.addEventListener('pagehide', () => {clearTimeout(bootTimer); clearTimeout(shutdownTimer); stopWorkers(); releaseModules();});
+window.addEventListener('pagehide', () => {disconnectKeyboard(); clearTimeout(bootTimer); clearTimeout(shutdownTimer); stopWorkers(); releaseModules();});
 
 async function saveDisk() {
   if (!poweredOff || !canSave || saving) return;
@@ -141,6 +154,7 @@ $('save-disk').onclick = async () => {
 };
 
 function exited(code) {
+  disconnectKeyboard();
   clearTimeout(bootTimer); clearTimeout(shutdownTimer); stopWorkers();
   releaseModules();
   disconnectExchange?.();
@@ -235,6 +249,8 @@ async function boot() {
       // Guest Pixman already renders the desktop on its virtual CPU. Presenting
       // that framebuffer through a main-thread canvas avoids requiring worker GL.
       module.ENV.SDL_RENDER_DRIVER = 'software';
+      module.ENV.SDL_EMSCRIPTEN_KEYBOARD_ELEMENT = '#canvas';
+      if (inputTrace) module.ENV.SDL_EVENT_LOGGING = '1';
       module.FS.mkdir('/pack');
       module.FS.mkdir('/exchange'); module.FS.mkdir('/exchange/.control');
       for (const file of diskFiles) module.FS.writeFile(file.path, file.bytes, {canOwn: true});
@@ -285,6 +301,8 @@ async function boot() {
   const args = [
     '-M', 'pc,i8042=off', '-cpu', 'qemu64,-svm,-vmx', '-m', memory + 'M', '-smp', '1', '-accel', 'tcg,tb-size=64', '-nodefaults',
     '-L', '/pack', '-nic', 'none', '-monitor', 'none', '-serial', 'stdio', '-parallel', 'none', '-no-reboot',
+    ...(inputTrace ? ['-D', '/input-trace.log', '-msg', 'timestamp=on', '-trace', 'enable=sdl2_process_key',
+      '-trace', 'enable=virtio_input_queue_full', '-trace', 'enable=input_event_key_qcode'] : []),
     ...(exchangeEnabled ? ['-virtfs', 'local,path=/exchange,mount_tag=browser,security_model=mapped-file,id=browser'] : []),
     // Emscripten's random device reads crypto.getRandomValues. Give Linux a
     // genuine entropy source instead of relying on virtual hardware timing.
