@@ -1,0 +1,8 @@
+# Browser Linux: sysvinit starts one boot script instead of the full rc
+# sequence, which keeps startup short under instruction translation.
+id:2:initdefault:
+si::sysinit:/usr/local/sbin/browser-boot
+T0:2345:respawn:/sbin/agetty --autologin root --noclear --keep-baud 115200 ttyS0 vt100
+l0:0:wait:/usr/local/sbin/browser-halt poweroff
+l6:6:wait:/usr/local/sbin/browser-halt reboot
+ca:12345:ctrlaltdel:/sbin/shutdown -t1 -r now

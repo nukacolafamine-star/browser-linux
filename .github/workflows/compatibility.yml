@@ -1,27 +1,35 @@
 # Isolated build only. This workflow cannot deploy Pages or change the repository.
-name: Build browser Linux compatibility proof
+name: Build browser Linux compatibility engine
 on:
   workflow_dispatch:
     inputs:
       runtime:
-        description: Build the emulator as well as the guest image
+        description: Build the emulator
+        type: boolean
+        default: true
+      desktop:
+        description: Build and verify the Debian desktop guest
+        type: boolean
+        default: true
+      launcher:
+        description: Also check that the official Minecraft Launcher installs and opens (downloads from Mojang)
         type: boolean
         default: true
   push:
-    branches: [feature/portable-compatibility]
+    branches: [feature/desktop-platform]
     paths:
       - 'tools/compatibility-build/**'
       - '.github/workflows/compatibility.yml'
 permissions:
   contents: read
 concurrency:
-  group: browser-linux-compatibility-proof-${{ github.run_id }}
+  group: browser-linux-compatibility-${{ github.run_id }}
   cancel-in-progress: false
 jobs:
   compile:
     if: github.event_name != 'workflow_dispatch' || inputs.runtime
     runs-on: ubuntu-24.04
-    timeout-minutes: 60
+    timeout-minutes: 75
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -47,7 +55,7 @@ jobs:
           outputs: type=cacheonly
       - name: Compile x86_64 emulator for the browser
         uses: docker/build-push-action@v6
-        timeout-minutes: 25
+        timeout-minutes: 40
         with:
           context: tools/compatibility-build
           file: tools/compatibility-build/generated/runtime.Dockerfile
@@ -55,7 +63,8 @@ jobs:
           build-args: |
             QEMU_REPO_VERSION=8604ed49a3cde392890b014a8d5a959c8a2fe72a
             EMSDK_VERSION_QEMU=4.0.10
-            WASM_MEMORY_MIB=1024
+            WASM_INITIAL_MEMORY_MIB=256
+            WASM_MAXIMUM_MEMORY_MIB=4096
           cache-from: |
             type=gha,scope=browser-linux-qemu-dependencies
             type=gha,scope=browser-linux-qemu-proof
@@ -70,32 +79,38 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: browser-linux-compatibility-proof
+          name: browser-linux-runtime
           path: compatibility-artifact
-          retention-days: 7
-  guest:
+          retention-days: 14
+  desktop:
+    if: github.event_name != 'workflow_dispatch' || inputs.desktop
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 120
     steps:
       - uses: actions/checkout@v4
       - uses: docker/setup-buildx-action@v3
-      - name: Build the x86-64 Linux and Weston filesystem
+      - name: Build the Debian desktop guest and its kernel
         uses: docker/build-push-action@v6
+        timeout-minutes: 60
         with:
-          context: tools/compatibility-build/guest
-          outputs: type=local,dest=guest-artifact
-          cache-from: type=gha,scope=browser-linux-guest-proof
-          cache-to: type=gha,mode=max,scope=browser-linux-guest-proof
-      - name: Install emulator on the isolated CI runner
+          context: tools/compatibility-build
+          file: tools/compatibility-build/desktop/Dockerfile
+          outputs: type=local,dest=desktop-artifact
+          cache-from: type=gha,scope=browser-linux-desktop
+          cache-to: type=gha,mode=max,scope=browser-linux-desktop
+      - name: Install emulator only on the isolated CI runner
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends qemu-system-x86
-      - name: Verify the real Linux Wayland guest with software rendering
-        timeout-minutes: 3
-        run: python3 tools/compatibility-build/verify-guest.py guest-artifact --startup-timeout 90
+          sudo apt-get install -y --no-install-recommends qemu-system-x86 imagemagick
+      - name: Verify the guest desktop with native software emulation
+        timeout-minutes: 45
+        run: |
+          launcher_flag=--launcher
+          if [ "${{ github.event_name }}" = workflow_dispatch ] && [ "${{ inputs.launcher }}" != true ]; then launcher_flag=; fi
+          python3 tools/compatibility-build/verify-desktop.py desktop-artifact --startup-timeout 420 $launcher_flag
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: browser-linux-guest-proof
-          path: guest-artifact
-          retention-days: 7
+          name: browser-linux-desktop
+          path: desktop-artifact
+          retention-days: 14

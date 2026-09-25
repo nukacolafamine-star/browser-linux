@@ -1,0 +1,2 @@
+# The root filesystem is mounted read-write by the kernel (root=/dev/vda rw).
+/dev/vda  /  ext4  rw,relatime,noinit_itable  0  1

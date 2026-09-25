@@ -1,0 +1,16 @@
+#!/bin/sh
+# Final stage of shutdown (runlevel 0 or 6): stop the session, flush and
+# unmount filesystems, then power off so the browser's emulator exits.
+console() { printf '%s\n' "$*" > /dev/ttyS0; }
+console 'BROWSER_LINUX_STOPPING'
+pkill -TERM -u user 2>/dev/null
+sleep 1
+pkill -KILL -u user 2>/dev/null
+pkill -TERM seatd 2>/dev/null
+umount /mnt/browser 2>/dev/null
+sync
+mount -o remount,ro / 2>/dev/null
+sync
+console 'BROWSER_LINUX_STOPPED'
+if [ "$1" = reboot ]; then exec /sbin/reboot -f; fi
+exec /sbin/halt -f -p

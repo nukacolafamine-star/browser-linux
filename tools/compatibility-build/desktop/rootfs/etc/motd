@@ -1,0 +1,8 @@
+
+ Browser Linux desktop: Debian 13 on an emulated x86-64 PC in this browser tab.
+ Everything runs on your device. Your disk is saved in this browser as you work.
+
+   sudo apt update && sudo apt install <package>   install software (needs networking)
+   minecraft-launcher                              install and start the official launcher
+   /mnt/browser                                    files exchanged with the web page
+

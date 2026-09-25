@@ -1,0 +1,47 @@
+#!/bin/bash
+# Installs the official Minecraft Launcher from Mojang's download server into
+# this user's home directory, then starts it. The launcher and game are never
+# part of the Browser Linux image; each user downloads them from Mojang and
+# signs in with their own account inside the launcher.
+set -euo pipefail
+
+url=https://launcher.mojang.com/download/Minecraft.tar.gz
+# Linux launcher bootstrap published on 2026-09-25 (1,102,510 bytes), as pinned
+# by the Flathub and Arch packaging. Mojang may publish a newer build.
+tested_sha256=695269281547bbbcf47fe74633027a0e4ddc13a61060c686a7217e85d314e45e
+install_dir="${XDG_DATA_HOME:-$HOME/.local/share}/minecraft-launcher"
+launcher="$install_dir/minecraft-launcher/minecraft-launcher"
+
+if [ ! -x "$launcher" ]; then
+  echo "Minecraft Launcher is not installed yet."
+  if ! getent hosts launcher.mojang.com > /dev/null; then
+    echo "No Internet connection. Start Browser Linux from its local server (Start Browser Linux.cmd)"
+    echo "with networking enabled, then try again."
+    exit 1
+  fi
+  echo "Downloading the official launcher from $url ..."
+  work=$(mktemp -d)
+  trap 'rm -rf "$work"' EXIT
+  curl --fail --location --retry 3 --progress-bar -o "$work/Minecraft.tar.gz" "$url"
+  actual=$(sha256sum "$work/Minecraft.tar.gz" | cut -d' ' -f1)
+  if [ "$actual" = "$tested_sha256" ]; then
+    echo "Verified: this is the launcher build Browser Linux was tested with."
+  else
+    echo "Note: Mojang has published a different launcher build than the one tested"
+    echo "($actual). It was downloaded over HTTPS from Mojang and will be used."
+  fi
+  mkdir -p "$install_dir"
+  tar -xzf "$work/Minecraft.tar.gz" -C "$install_dir"
+  echo "Installed to $install_dir"
+fi
+
+# Stale embedded-browser version files can stop the launcher UI from loading
+# (the same workaround the Arch package applies).
+rm -f "$HOME/.minecraft/webcache2/CEF_VERSION"
+echo "Starting the Minecraft Launcher. The first start downloads more launcher"
+echo "files from Mojang and can take several minutes in the browser."
+cd "$HOME"
+# Mojang ships and the distribution packages run the launcher as an X11
+# program; Weston provides X11 through Xwayland.
+export GDK_BACKEND=x11
+exec "$launcher" --workDir "$HOME/.minecraft" "$@"

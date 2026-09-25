@@ -1,0 +1,250 @@
+diff --git a/hw/input/virtio-input.c b/hw/input/virtio-input.c
+index 5b5398b..17729b7 100644
+--- a/hw/input/virtio-input.c
++++ b/hw/input/virtio-input.c
+@@ -20,58 +20,175 @@
+ 
+ /* ----------------------------------------------------------------- */
+ 
+-void virtio_input_send(VirtIOInput *vinput, virtio_input_event *event)
++/*
++ * Events are grouped into batches that end with SYN_REPORT. A batch is handed
++ * to the guest only once it has posted buffers for all of it. Upstream QEMU
++ * discarded a batch when the event queue was full. That is rare with hardware
++ * virtualization but frequent under full instruction emulation, where the
++ * guest refills its buffers slowly: a discarded key release leaves the key
++ * held, and the guest then auto-repeats it. Undelivered batches are kept in
++ * order and retried whenever the guest refills the event queue.
++ */
++#define VIRTIO_INPUT_MAX_PENDING 8192
++
++static bool virtio_input_is_sync(const virtio_input_event *event)
++{
++    return event->type == cpu_to_le16(EV_SYN) &&
++           event->code == cpu_to_le16(SYN_REPORT);
++}
++
++/* Index of the first event of the batch whose SYN_REPORT is at end - 1. */
++static uint32_t virtio_input_batch_start(VirtIOInput *vinput, uint32_t end)
++{
++    uint32_t i = end - 1;
++
++    while (i > 0 && !virtio_input_is_sync(&vinput->pending[i - 1])) {
++        i--;
++    }
++    return i;
++}
++
++/* True if the batch only reports an absolute pointer position. */
++static bool virtio_input_is_abs_motion(const virtio_input_event *events,
++                                       uint32_t count)
++{
++    uint32_t i;
++
++    for (i = 0; i + 1 < count; i++) {
++        if (events[i].type != cpu_to_le16(EV_ABS)) {
++            return false;
++        }
++    }
++    return count > 1;
++}
++
++/*
++ * A newer absolute position supersedes an undelivered older one, so a slow
++ * guest does not replay stale pointer motion. Key and button batches are
++ * never merged or dropped.
++ */
++static void virtio_input_coalesce(VirtIOInput *vinput)
++{
++    uint32_t first, count, prev, i;
++
++    first = virtio_input_batch_start(vinput, vinput->pending_len);
++    count = vinput->pending_len - first;
++    if (!first || !virtio_input_is_abs_motion(&vinput->pending[first], count)) {
++        return;
++    }
++    prev = virtio_input_batch_start(vinput, first);
++    if (first - prev != count) {
++        return;
++    }
++    for (i = 0; i < count; i++) {
++        if (vinput->pending[prev + i].type != vinput->pending[first + i].type ||
++            vinput->pending[prev + i].code != vinput->pending[first + i].code) {
++            return;
++        }
++    }
++    memcpy(&vinput->pending[prev], &vinput->pending[first],
++           count * sizeof(vinput->pending[0]));
++    vinput->pending_len = first;
++}
++
++static void virtio_input_flush(VirtIOInput *vinput)
+ {
+     VirtQueueElement *elem;
+-    int i, len;
++    uint32_t start = 0, end, count, i;
++    bool delivered = false;
++    int len;
++
++    while (start < vinput->pending_len) {
++        end = start;
++        while (end < vinput->pending_len &&
++               !virtio_input_is_sync(&vinput->pending[end])) {
++            end++;
++        }
++        if (end == vinput->pending_len) {
++            break; /* this batch is still being assembled */
++        }
++        count = end + 1 - start;
++        if (vinput->elems_size < count) {
++            vinput->elems_size = count;
++            vinput->elems = g_renew(VirtQueueElement *, vinput->elems, count);
++        }
++        for (i = 0; i < count; i++) {
++            elem = virtqueue_pop(vinput->evt, sizeof(VirtQueueElement));
++            if (!elem) {
++                while (i-- > 0) {
++                    virtqueue_unpop(vinput->evt, vinput->elems[i], 0);
++                    g_free(vinput->elems[i]);
++                }
++                trace_virtio_input_queue_full();
++                goto out;
++            }
++            vinput->elems[i] = elem;
++        }
++        for (i = 0; i < count; i++) {
++            elem = vinput->elems[i];
++            len = iov_from_buf(elem->in_sg, elem->in_num, 0,
++                               &vinput->pending[start + i],
++                               sizeof(virtio_input_event));
++            virtqueue_push(vinput->evt, elem, len);
++            g_free(elem);
++        }
++        delivered = true;
++        start += count;
++    }
++out:
++    if (start) {
++        vinput->pending_len -= start;
++        memmove(vinput->pending, vinput->pending + start,
++                vinput->pending_len * sizeof(vinput->pending[0]));
++    }
++    if (delivered) {
++        virtio_notify(VIRTIO_DEVICE(vinput), vinput->evt);
++    }
++}
++
++void virtio_input_send(VirtIOInput *vinput, virtio_input_event *event)
++{
++    uint32_t drop;
+ 
+     if (!vinput->active) {
+         return;
+     }
+ 
+     /* queue up events ... */
+-    if (vinput->qindex == vinput->qsize) {
+-        vinput->qsize++;
+-        vinput->queue = g_realloc(vinput->queue, vinput->qsize *
+-                                  sizeof(vinput->queue[0]));
++    if (vinput->pending_len == vinput->pending_size) {
++        vinput->pending_size = MAX(64, vinput->pending_size * 2);
++        vinput->pending = g_renew(virtio_input_event, vinput->pending,
++                                  vinput->pending_size);
+     }
+-    vinput->queue[vinput->qindex++].event = *event;
++    vinput->pending[vinput->pending_len++] = *event;
+ 
+     /* ... until we see a report sync ... */
+-    if (event->type != cpu_to_le16(EV_SYN) ||
+-        event->code != cpu_to_le16(SYN_REPORT)) {
++    if (!virtio_input_is_sync(event)) {
+         return;
+     }
++    virtio_input_coalesce(vinput);
+ 
+-    /* ... then check available space ... */
+-    for (i = 0; i < vinput->qindex; i++) {
+-        elem = virtqueue_pop(vinput->evt, sizeof(VirtQueueElement));
+-        if (!elem) {
+-            while (--i >= 0) {
+-                virtqueue_unpop(vinput->evt, vinput->queue[i].elem, 0);
+-            }
+-            vinput->qindex = 0;
+-            trace_virtio_input_queue_full();
+-            return;
++    /* ... bound memory if the guest has stopped reading events ... */
++    while (vinput->pending_len > VIRTIO_INPUT_MAX_PENDING) {
++        drop = 0;
++        while (!virtio_input_is_sync(&vinput->pending[drop])) {
++            drop++;
+         }
+-        vinput->queue[i].elem = elem;
++        drop++;
++        vinput->pending_len -= drop;
++        memmove(vinput->pending, vinput->pending + drop,
++                vinput->pending_len * sizeof(vinput->pending[0]));
++        trace_virtio_input_queue_full();
+     }
+ 
+-    /* ... and finally pass them to the guest */
+-    for (i = 0; i < vinput->qindex; i++) {
+-        elem = vinput->queue[i].elem;
+-        len = iov_from_buf(elem->in_sg, elem->in_num,
+-                           0, &vinput->queue[i].event, sizeof(virtio_input_event));
+-        virtqueue_push(vinput->evt, elem, len);
+-        g_free(elem);
+-    }
+-    virtio_notify(VIRTIO_DEVICE(vinput), vinput->evt);
+-    vinput->qindex = 0;
++    /* ... and pass complete batches to the guest when it has room */
++    virtio_input_flush(vinput);
+ }
+ 
+ static void virtio_input_handle_evt(VirtIODevice *vdev, VirtQueue *vq)
+ {
+-    /* nothing */
++    /* The guest posted more event buffers: deliver what is waiting. */
++    virtio_input_flush(VIRTIO_INPUT(vdev));
+ }
+ 
+ static void virtio_input_handle_sts(VirtIODevice *vdev, VirtQueue *vq)
+@@ -209,6 +326,7 @@ static void virtio_input_reset(VirtIODevice *vdev)
+     VirtIOInputClass *vic = VIRTIO_INPUT_GET_CLASS(vdev);
+     VirtIOInput *vinput = VIRTIO_INPUT(vdev);
+ 
++    vinput->pending_len = 0;
+     if (vinput->active) {
+         vinput->active = false;
+         if (vic->change_active) {
+@@ -272,7 +390,8 @@ static void virtio_input_finalize(Object *obj)
+         g_free(cfg);
+     }
+ 
+-    g_free(vinput->queue);
++    g_free(vinput->pending);
++    g_free(vinput->elems);
+ }
+ 
+ static void virtio_input_device_unrealize(DeviceState *dev)
+diff --git a/include/hw/virtio/virtio-input.h b/include/hw/virtio/virtio-input.h
+index a6c9703..0805dc1 100644
+--- a/include/hw/virtio/virtio-input.h
++++ b/include/hw/virtio/virtio-input.h
+@@ -60,11 +60,11 @@ struct VirtIOInput {
+     VirtQueue                         *evt, *sts;
+     char                              *serial;
+ 
+-    struct {
+-        virtio_input_event event;
+-        VirtQueueElement *elem;
+-    }                                 *queue;
+-    uint32_t                          qindex, qsize;
++    /* Undelivered events in order; complete batches end with SYN_REPORT. */
++    virtio_input_event                *pending;
++    uint32_t                          pending_len, pending_size;
++    VirtQueueElement                  **elems;
++    uint32_t                          elems_size;
+ 
+     bool                              active;
+ };

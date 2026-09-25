@@ -1,0 +1,40 @@
+#!/bin/sh
+# Starts the seat manager and the desktop user's Wayland session, then reports
+# each stage on the serial console for the browser page and tests.
+set -u
+console() { printf '%s\n' "$*" > /dev/ttyS0; }
+fail() { console "BROWSER_LINUX_GRAPHICS_FAILED: $*"; exit 1; }
+wait_for() { # seconds, test...
+  limit=$(( $1 * 10 )); shift; i=0
+  until "$@"; do
+    i=$((i + 1)); [ "$i" -lt "$limit" ] || return 1
+    sleep 0.1
+  done
+}
+
+[ -e /dev/dri/card0 ] || fail 'no virtual DRM card'
+user=user
+uid=$(id -u "$user")
+runtime=/run/user/$uid
+mkdir -p "$runtime"; chown "$user:$user" "$runtime"; chmod 700 "$runtime"
+
+SEATD_VTBOUND=0 seatd -g video > /var/log/seatd.log 2>&1 &
+wait_for 30 test -S /run/seatd.sock || fail 'seatd did not start; see /var/log/seatd.log'
+
+# GPU-accelerated rendering is used when the browser provides a 3D-capable
+# virtual GPU; otherwise Weston composites on the CPU.
+renderer=pixman
+case " $(cat /proc/cmdline) " in *' browser.renderer=gl '*) renderer=gl ;; esac
+
+runuser -u "$user" -- env -i HOME="/home/$user" USER="$user" LOGNAME="$user" SHELL=/bin/bash \
+  PATH=/usr/local/bin:/usr/bin:/bin XDG_RUNTIME_DIR="$runtime" BROWSER_RENDERER="$renderer" \
+  /usr/local/bin/browser-session > /var/log/browser-session.log 2>&1 &
+
+wait_for 240 test -S "$runtime/wayland-0" || fail 'Weston did not create its socket; see /var/log/browser-session.log'
+console "BROWSER_LINUX_WAYLAND_READY compositor_pid=$(pgrep -u "$user" -x weston | head -n1) socket=$runtime/wayland-0 renderer=$renderer"
+if wait_for 60 test -S /tmp/.X11-unix/X0; then console 'BROWSER_LINUX_XWAYLAND_READY display=:0'; fi
+if wait_for 120 pgrep -u "$user" -x foot > /dev/null; then
+  console "BROWSER_LINUX_WAYLAND_CLIENT_STARTED terminal_pid=$(pgrep -u "$user" -x foot | head -n1)"
+else
+  console 'BROWSER_LINUX_WAYLAND_CLIENT_FAILED'
+fi

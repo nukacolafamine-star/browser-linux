@@ -1,0 +1,47 @@
+diff --git a/tcg/wasm32.c b/tcg/wasm32.c
+index d60ce4b..97ed765 100644
+--- a/tcg/wasm32.c
++++ b/tcg/wasm32.c
+@@ -41,7 +41,7 @@ int print_insn_tci(bfd_vma addr, disassemble_info *info)
+ EM_JS(int, instantiate_wasm, (), {
+         const memory_v = new DataView(HEAP8.buffer);
+ 
+-        const tb_ptr = memory_v.getInt32(Module.__wasm32_tb.tb_ptr_ptr, true);
++        const tb_ptr = memory_v.getUint32(Module.__wasm32_tb.tb_ptr_ptr, true);
+         const export_vec_size = memory_v.getInt32(tb_ptr + 4, true);
+         const export_vec_begin = tb_ptr + 4 + 4;
+ 
+@@ -61,7 +61,7 @@ EM_JS(int, instantiate_wasm, (), {
+         
+         var helper = {};
+         for (var i = 0; i < import_vec_size / 4; i++) {
+-            helper[i] = wasmTable.get(memory_v.getInt32(import_vec_begin + i * 4, true));
++            helper[i] = wasmTable.get(memory_v.getUint32(import_vec_begin + i * 4, true));
+         }
+         const mod = new WebAssembly.Module(wasmBytes);
+         const inst = new WebAssembly.Instance(mod, {
+@@ -89,7 +89,7 @@ EM_JS(void, remove_module_js, (), {
+         const memory_v = new DataView(HEAP8.buffer);
+         const remove_n = memory_v.getInt32(Module.__wasm32_tb.to_remove_instance_idx_ptr, true);
+         for (var i = 0; i < remove_n * 4; i += 4) {
+-            removeFunction(memory_v.getInt32(Module.__wasm32_tb.to_remove_instance_ptr + i, true));
++            removeFunction(memory_v.getUint32(Module.__wasm32_tb.to_remove_instance_ptr + i, true));
+         }
+         memory_v.setInt32(Module.__wasm32_tb.to_remove_instance_idx_ptr, 0, true);
+     });
+@@ -232,11 +232,11 @@ int get_core_nums()
+ 
+ EM_JS(void, init_wasm32_js, (int tb_ptr_ptr, int cur_core_num, int to_remove_instance_ptr, int to_remove_instance_idx_ptr, int instance_garbage_collected_ptr), {
+         Module.__wasm32_tb = {
+-            tb_ptr_ptr: tb_ptr_ptr,
++            tb_ptr_ptr: tb_ptr_ptr >>> 0,
+             cur_core_num: cur_core_num,
+-            to_remove_instance_ptr: to_remove_instance_ptr,
+-            to_remove_instance_idx_ptr: to_remove_instance_idx_ptr,
+-            instance_garbage_collected_ptr: instance_garbage_collected_ptr,
++            to_remove_instance_ptr: to_remove_instance_ptr >>> 0,
++            to_remove_instance_idx_ptr: to_remove_instance_idx_ptr >>> 0,
++            instance_garbage_collected_ptr: instance_garbage_collected_ptr >>> 0,
+             inst_gc_registry: new FinalizationRegistry((i) => {
+                     if (i == "instance") {
+                         const memory_v = new DataView(HEAP8.buffer);

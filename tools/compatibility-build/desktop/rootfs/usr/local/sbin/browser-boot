@@ -1,0 +1,53 @@
+#!/bin/sh
+# Run once by init. Prepares the system, then starts the network, file
+# exchange and desktop in the background so the serial shell appears quickly.
+set -u
+console() { printf '%s\n' "$*" > /dev/ttyS0; }
+
+mountpoint -q /proc || mount -t proc proc /proc
+mountpoint -q /sys || mount -t sysfs sysfs /sys
+mountpoint -q /dev || mount -t devtmpfs devtmpfs /dev
+mkdir -p /dev/pts /dev/shm
+mountpoint -q /dev/pts || mount -t devpts -o gid=5,mode=620,ptmxmode=666 devpts /dev/pts
+mountpoint -q /dev/shm || mount -t tmpfs -o mode=1777,nosuid,nodev tmpfs /dev/shm
+mountpoint -q /run || mount -t tmpfs -o mode=755,nosuid,nodev tmpfs /run
+mountpoint -q /tmp || mount -t tmpfs -o mode=1777,nosuid,nodev tmpfs /tmp
+mount -o remount,rw / 2>/dev/null || true
+mkdir -p /run/lock /run/user /run/browser-linux /var/log
+ln -sf /proc/self/mounts /etc/mtab 2>/dev/null || true
+
+hostname browser-linux
+printf '127.0.0.1\tlocalhost\n127.0.1.1\tbrowser-linux\n::1\tlocalhost ip6-localhost ip6-loopback\n' > /etc/hosts
+[ -s /etc/machine-id ] || dbus-uuidgen > /etc/machine-id
+ip link set lo up
+. /etc/os-release
+console ''
+console "BROWSER_LINUX_GUEST_BOOT arch=$(uname -m) kernel=$(uname -r) distro=$ID-$VERSION_ID"
+
+# The browser's virtual network uses QEMU's user-mode addressing.
+if [ -e /sys/class/net/eth0 ]; then
+  ip link set eth0 up
+  ip addr add 10.0.2.15/24 dev eth0
+  ip route add default via 10.0.2.2
+  printf 'nameserver 10.0.2.3\n' > /etc/resolv.conf
+  console 'BROWSER_LINUX_NETWORK_READY address=10.0.2.15 gateway=10.0.2.2'
+else
+  : > /etc/resolv.conf
+  console 'BROWSER_LINUX_NETWORK_UNAVAILABLE'
+fi
+
+/usr/lib/systemd/systemd-udevd --daemon
+# Only desktop-relevant subsystems need udev processing at boot.
+udevadm trigger --action=add --subsystem-match=drm --subsystem-match=input \
+  --subsystem-match=graphics --subsystem-match=sound --subsystem-match=net --subsystem-match=misc
+udevadm settle --timeout=30 || true
+
+mkdir -p /run/dbus
+dbus-daemon --system --fork
+
+/usr/local/sbin/browser-exchange > /var/log/browser-exchange.log 2>&1 &
+case " $(cat /proc/cmdline) " in
+  *' browser.graphics=off '*) console 'BROWSER_LINUX_GRAPHICS_DISABLED' ;;
+  *) setsid /usr/local/sbin/browser-desktop > /var/log/browser-desktop.log 2>&1 < /dev/null & ;;
+esac
+exit 0

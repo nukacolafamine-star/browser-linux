@@ -1,0 +1,2 @@
+# The desktop user administers their own browser-local machine.
+user ALL=(ALL:ALL) NOPASSWD: ALL

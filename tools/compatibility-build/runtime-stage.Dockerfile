@@ -1,7 +1,19 @@
 # Appended to a hash-verified container2wasm Dockerfile. Reuses only its build
 # dependency stages, not its container guest, its 3GiB heap or its runtime args.
 FROM qemu-emscripten-dev AS browser-linux-runtime-build
-ARG WASM_MEMORY_MIB=1024
+# Linear memory starts small and grows with the guest RAM chosen at launch, up
+# to the 4 GiB wasm32 limit. Guests over ~2.5 GiB need the upper part of it.
+ARG WASM_INITIAL_MEMORY_MIB=256
+ARG WASM_MAXIMUM_MEMORY_MIB=4096
+
+# Browser Linux fixes for the pinned fork: keep undelivered input events
+# instead of discarding them (lost key releases caused stuck, repeating keys),
+# block briefly instead of spinning when the main loop is idle, and treat
+# pointers above 2 GiB as unsigned in the JIT's JavaScript glue.
+COPY patches/qemu/ /tmp/qemu-patches/
+RUN cd /qemu && for patch in /tmp/qemu-patches/*.patch; do \
+      git apply --check "$patch" && git apply "$patch" && echo "applied $patch" || exit 1; \
+    done
 
 # 9P2000.L replies use Linux errno numbers. Emscripten uses the WASI numbering.
 # Verify the pinned source before changing the host-to-guest protocol boundary.
@@ -19,7 +31,7 @@ RUN printf '#include <SDL.h>\nint main(void) { return SDL_Init(SDL_INIT_VIDEO); 
     emcc /tmp/sdl-probe.c -pthread -sUSE_SDL=2 -o /tmp/sdl-probe.js && \
     cp /emsdk/upstream/emscripten/cache/sysroot/lib/pkgconfig/sdl2.pc /glib-emscripten/target/lib/pkgconfig/
 
-RUN EXTRA_CFLAGS="-O3 -g2 -Wno-error=unused-command-line-argument -Wno-error=unused-but-set-variable -matomics -mbulk-memory -DNDEBUG -DG_DISABLE_ASSERT -D_GNU_SOURCE -sASYNCIFY=1 -pthread -sPROXY_TO_PTHREAD=1 -sEXIT_RUNTIME=1 -sFORCE_FILESYSTEM=1 -sALLOW_TABLE_GROWTH=1 -sINITIAL_MEMORY=$((WASM_MEMORY_MIB*1024*1024)) -sMAXIMUM_MEMORY=$((WASM_MEMORY_MIB*1024*1024)) -sALLOW_MEMORY_GROWTH=0 -sWASM_BIGINT=1 -sMALLOC=emmalloc -sMODULARIZE=1 -sEXPORT_ES6=1 -sEXPORT_NAME=createQemu -sASYNCIFY_IMPORTS=ffi_call_js -sUSE_SDL=2 -sOFFSCREENCANVAS_SUPPORT=0 $XTERM_PTY_CFLAGS" ; \
+RUN EXTRA_CFLAGS="-O3 -g2 -Wno-error=unused-command-line-argument -Wno-error=unused-but-set-variable -matomics -mbulk-memory -DNDEBUG -DG_DISABLE_ASSERT -D_GNU_SOURCE -sASYNCIFY=1 -pthread -sPROXY_TO_PTHREAD=1 -sEXIT_RUNTIME=1 -sFORCE_FILESYSTEM=1 -sALLOW_TABLE_GROWTH=1 -sINITIAL_MEMORY=$((WASM_INITIAL_MEMORY_MIB*1024*1024)) -sMAXIMUM_MEMORY=$((WASM_MAXIMUM_MEMORY_MIB*1024*1024)) -sALLOW_MEMORY_GROWTH=1 -sWASM_BIGINT=1 -sMALLOC=emmalloc -sMODULARIZE=1 -sEXPORT_ES6=1 -sEXPORT_NAME=createQemu -sASYNCIFY_IMPORTS=ffi_call_js -sUSE_SDL=2 -sOFFSCREENCANVAS_SUPPORT=0 $XTERM_PTY_CFLAGS" ; \
     emconfigure ../configure --static --target-list=x86_64-softmmu --cpu=wasm32 --cross-prefix= \
       --without-default-features --enable-system --with-coroutine=fiber --enable-virtfs --enable-sdl --enable-pixman \
       --extra-cflags="$EXTRA_CFLAGS" --extra-cxxflags="$EXTRA_CFLAGS" \
@@ -38,6 +50,8 @@ RUN mkdir -p /out/runtime/vendor /out/pack /out/provenance /out/sources && \
     cp /qemu/COPYING.LIB /out/provenance/QEMU-COPYING.LIB && \
     cp /tmp/9p-errno-patch.json /out/provenance/ && \
     cp /tmp/patch-9p-errno.py /tmp/9p-errno-emscripten.h /tmp/probe-9p-errno.c /out/sources/ && \
+    mkdir -p /out/sources/qemu-patches && cp /tmp/qemu-patches/*.patch /out/sources/qemu-patches/ && \
+    printf '{"initialMiB":%s,"maximumMiB":%s,"growable":true}\n' "$WASM_INITIAL_MEMORY_MIB" "$WASM_MAXIMUM_MEMORY_MIB" > /out/provenance/memory.json && \
     git -C /qemu rev-parse HEAD > /out/provenance/qemu-commit.txt && \
     git -C /qemu archive --format=tar HEAD | gzip -n > /out/sources/qemu-wasm.tar.gz
 

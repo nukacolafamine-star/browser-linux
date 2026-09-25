@@ -1,0 +1,38 @@
+diff --git a/util/qemu-timer.c b/util/qemu-timer.c
+index 6a0de33..a2b4de3 100644
+--- a/util/qemu-timer.c
++++ b/util/qemu-timer.c
+@@ -332,9 +332,32 @@ int qemu_timeout_ns_to_ms(int64_t ns)
+ /* qemu implementation of g_poll which uses a nanosecond timeout but is
+  * otherwise identical to g_poll
+  */
++#ifdef __EMSCRIPTEN__
++/* Longest idle sleep before looking for file descriptor events again. */
++#define QEMU_EMSCRIPTEN_IDLE_NS 1000000
++#endif
++
+ int qemu_poll_ns(GPollFD *fds, guint nfds, int64_t timeout)
+ {
+-#ifdef CONFIG_PPOLL
++#ifdef __EMSCRIPTEN__
++    /*
++     * Emscripten's poll() reports readiness but never blocks. A main loop that
++     * waits for events would otherwise spin, sending a proxied system call to
++     * the browser's main thread on every iteration. Sleep briefly while nothing
++     * is ready, never past the caller's deadline, and report no events; the
++     * caller then runs expired timers and polls again.
++     */
++    int ret = poll((struct pollfd *)fds, nfds, 0);
++    if (ret == 0 && timeout != 0) {
++        struct timespec ts = {
++            .tv_sec = 0,
++            .tv_nsec = timeout < 0 ? QEMU_EMSCRIPTEN_IDLE_NS
++                                   : MIN(timeout, QEMU_EMSCRIPTEN_IDLE_NS),
++        };
++        nanosleep(&ts, NULL);
++    }
++    return ret;
++#elif defined(CONFIG_PPOLL)
+     if (timeout < 0) {
+         return ppoll((struct pollfd *)fds, nfds, NULL, NULL);
+     } else {
