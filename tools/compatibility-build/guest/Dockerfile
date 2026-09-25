@@ -1,5 +1,5 @@
 # Build only in an isolated Linux CI runner/container. No host setup is needed.
-# Output: rootfs.img, vmlinuz-virt, initramfs-virt, package-versions.txt, SHA256SUMS.
+# Output: guest disk/kernel, capability manifest, package provenance, SHA256SUMS.
 ARG ALPINE_VERSION=3.21
 FROM alpine:${ALPINE_VERSION} AS guest
 RUN apk add --no-cache \
@@ -34,12 +34,15 @@ RUN mkdir /out && \
     cp /rootfs/boot/vmlinuz-virt /out/vmlinuz-virt && \
     cp /rootfs/boot/initramfs-virt /out/initramfs-virt && \
     cp /rootfs/usr/share/browser-linux/package-versions.txt /out/package-versions.txt && \
+    cp /rootfs/lib/apk/db/installed /out/apk-installed.txt && \
+    cp /rootfs/etc/apk/repositories /out/apk-repositories.txt && \
+    printf '%s\n' '{"schema":1,"exchange":"virtio-9p","shutdown":"pid1-control-file","renderer":"pixman","architecture":"x86_64"}' > /out/guest-capabilities.json && \
     du -sh /rootfs && \
     truncate -s "${ROOTFS_MIB}M" /out/rootfs.img && \
     mkfs.ext4 -F -L browser-linux -O '^has_journal' -d /rootfs /out/rootfs.img && \
     e2fsck -fn /out/rootfs.img && \
     gzip -9 -n -c /out/rootfs.img > /out/rootfs.img.gz && \
-    cd /out && sha256sum rootfs.img rootfs.img.gz vmlinuz-virt initramfs-virt package-versions.txt > SHA256SUMS
+    cd /out && sha256sum rootfs.img rootfs.img.gz vmlinuz-virt initramfs-virt package-versions.txt apk-installed.txt apk-repositories.txt guest-capabilities.json > SHA256SUMS
 
 FROM scratch
 COPY --from=image /out/ /

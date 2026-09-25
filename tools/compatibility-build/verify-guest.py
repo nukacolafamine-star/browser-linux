@@ -89,7 +89,9 @@ try:
             "-drive", f"file={artifact / 'rootfs.img'},if=virtio,format=raw,snapshot=on",
             "-append", "console=ttyS0,115200 root=/dev/vda rootfstype=ext4 rw",
             "-vga", "none", "-device", "virtio-vga", "-display", "none", "-serial", "stdio", "-monitor", "none",
-            "-virtfs", f"local,path={exchange},mount_tag=browser,security_model=passthrough,id=browser",
+            # Native CI is unprivileged; ignore host chown failures. Browser
+            # MEMFS uses passthrough because its ownership is virtual in-tab.
+            "-virtfs", f"local,path={exchange},mount_tag=browser,security_model=none,id=browser",
             "-qmp", f"unix:{sock_path},server=on,wait=off", "-nic", "none", "-no-reboot"]
     report["arguments"] = argv
     process = subprocess.Popen(argv, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
@@ -157,7 +159,7 @@ except Exception as error:
 finally:
     if process is not None and process.poll() is None:
         try:
-            serial_command("cat /var/log/browser-weston.log /var/log/seatd.log /var/log/weston.log /var/log/weston-terminal.log 2>/dev/null")
+            serial_command("cat /var/log/browser-weston.log /var/log/browser-exchange.log /var/log/seatd.log /var/log/weston.log /var/log/weston-terminal.log 2>/dev/null")
             time.sleep(0.5)
         finally:
             process.terminate()
