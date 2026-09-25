@@ -51,7 +51,7 @@ def archive(name, source, exclude=(), skip_binaries=False):
         raise RuntimeError(f'Source archive exceeds conservative release asset size: {destination}')
 
 
-def checkout(name, repository, commit):
+def checkout(name, repository, commit, submodule_paths=None):
     if len(commit) != 40 or any(c not in '0123456789abcdef' for c in commit):
         raise RuntimeError(f'Unpinned commit for {name}')
     directory = Path('/source-checkouts') / name
@@ -62,10 +62,14 @@ def checkout(name, repository, commit):
     run('git', '-C', str(directory), 'checkout', '--detach', 'FETCH_HEAD')
     assert run('git', '-C', str(directory), 'rev-parse', 'HEAD') == commit
     # Git archives omit nested submodules; collect their pinned trees too.
-    run('git', '-C', str(directory), 'submodule', 'update', '--init', '--recursive', '--depth=1')
+    command = ['git', '-C', str(directory), 'submodule', 'update', '--init', '--recursive', '--depth=1']
+    if submodule_paths is not None:
+        command.extend(['--', *submodule_paths])
+    run(*command)
     submodules = run('git', '-C', str(directory), 'submodule', 'status', '--recursive')
     archive(name, directory)
-    records[-1].update(repository=repository, commit=commit, submoduleStatus=submodules)
+    records[-1].update(repository=repository, commit=commit, submoduleStatus=submodules,
+                       submoduleScope=submodule_paths if submodule_paths is not None else 'all')
 
 
 qemu_commit = run('git', '-C', '/qemu', 'rev-parse', 'HEAD')
@@ -104,7 +108,11 @@ archive('build-recipe', '/source-recipe', exclude=(('generated', 'source-input')
 archive('runtime-provenance', '/out/provenance')
 
 for component in firmware['components']:
-    checkout(component['id'], component['repository'], component['commit'])
+    # EDK2 is only the EfiRom packaging tool, not a distributed platform image.
+    # BaseTools has one submodule: BrotliCompress. Unrelated UEFI/unit-test
+    # submodules are not required by this tool (one old test repo is now gone).
+    paths = ['BaseTools/Source/C/BrotliCompress/brotli'] if component['id'] == 'edk2' else None
+    checkout(component['id'], component['repository'], component['commit'], paths)
 checkout('xterm-pty-source', 'https://github.com/mame/xterm-pty.git',
          'cfcbc7e2145d03a0afef45939e3971becb2b4443')
 package = json.loads(Path('/qemu/build/node_modules/xterm-pty/package.json').read_text())

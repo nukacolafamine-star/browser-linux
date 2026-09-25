@@ -27,7 +27,7 @@ The GPLv2 text bundled with QEMU defines corresponding source to include source 
 Runtime job:
 
 1. Prepare the same hash-checked container2wasm dependency recipe and append `source-stage.Dockerfile`.
-2. Reuse the existing compiler/dependency cache. Copy actual sources from the dependency stages, collect firmware trees recursively and retain provenance.
+2. Reuse the existing compiler/dependency cache. Copy actual sources from the dependency stages, collect firmware trees recursively and retain provenance. EDK2 supplies only the EfiRom packaging build tool: its BaseTools Brotli submodule is included; unrelated UEFI/unit-test submodules are explicitly outside this artifact's scope. One historical test-only repository is no longer public.
 3. Verify the collected build's Wasm hash equals the requested tested runtime artifact. A mismatch fails instead of claiming correspondence.
 4. Upload separate hashed archives. Each archive must be below 1.9 GB. Include an exact project source archive.
 
