@@ -3,6 +3,14 @@
 FROM qemu-emscripten-dev AS browser-linux-runtime-build
 ARG WASM_MEMORY_MIB=1024
 
+# 9P2000.L replies use Linux errno numbers. Emscripten uses the WASI numbering.
+# Verify the pinned source before changing the host-to-guest protocol boundary.
+COPY patch-9p-errno.py 9p-errno-emscripten.h probe-9p-errno.c test-9p-errno.py /tmp/
+RUN python3 /tmp/test-9p-errno.py /qemu/hw/9pfs/9p-util.h && \
+    python3 /tmp/patch-9p-errno.py /qemu && \
+    emcc /tmp/probe-9p-errno.c -I/tmp -sENVIRONMENT=node -sEXIT_RUNTIME=1 -o /tmp/probe-9p-errno.js && \
+    node /tmp/probe-9p-errno.js
+
 # Build Emscripten's SDL2 pthread port and expose its generated pkg-config file
 # to QEMU's Meson dependency discovery. QEMU runs in a pthread; SDL's software
 # framebuffer presents through its existing MAIN_THREAD_EM_ASM Canvas2D path.
@@ -28,6 +36,8 @@ RUN mkdir -p /out/runtime/vendor /out/pack /out/provenance /out/sources && \
     printf '%s\n' '{"exitRuntime":true,"shutdownBoundary":"normal QEMU main return after qemu_cleanup drains block I/O","saveOnlyAfter":"onExit with status 0 following requested guest shutdown"}' > /out/provenance/shutdown.json && \
     cp /qemu/COPYING /out/provenance/QEMU-COPYING && \
     cp /qemu/COPYING.LIB /out/provenance/QEMU-COPYING.LIB && \
+    cp /tmp/9p-errno-patch.json /out/provenance/ && \
+    cp /tmp/patch-9p-errno.py /tmp/9p-errno-emscripten.h /tmp/probe-9p-errno.c /out/sources/ && \
     git -C /qemu rev-parse HEAD > /out/provenance/qemu-commit.txt && \
     git -C /qemu archive --format=tar HEAD | gzip -n > /out/sources/qemu-wasm.tar.gz
 
