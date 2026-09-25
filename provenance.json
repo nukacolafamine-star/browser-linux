@@ -50,12 +50,8 @@
     }
   },
   "servedAssets": {
-    "version": "23ba248252515fc5",
+    "version": "8c8bcc28d3299dd9",
     "assets": {
-      ".nojekyll": {
-        "bytes": 0,
-        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-      },
       "app.js": {
         "bytes": 18847,
         "sha256": "e168e51c71f46ae7222810ae65a21f89c3e369a9899115634ad300f8a4df7077"

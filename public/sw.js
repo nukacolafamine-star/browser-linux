@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 const PREFIX='browser-linux:'+self.registration.scope+':';
-const CACHE=PREFIX+'23ba248252515fc5';
-const ASSETS=["./",".nojekyll","app.js","assets/addon-fit.js","assets/initramfs.cpio.gz","assets/vmlinux.wasm","assets/xterm.css","assets/xterm.js","bootstrap.js","icon.svg","index.html","integrity.js","licenses/GPL-2.0.txt","licenses/xterm-addon-fit.txt","licenses/xterm.txt","machine.js","manifest.webmanifest","runtime/browser-agent.js","runtime/linux-worker.js","runtime/linux.js","sources.html","storage.js","style.css"];
+const CACHE=PREFIX+'8c8bcc28d3299dd9';
+const ASSETS=["./","app.js","assets/addon-fit.js","assets/initramfs.cpio.gz","assets/vmlinux.wasm","assets/xterm.css","assets/xterm.js","bootstrap.js","icon.svg","index.html","integrity.js","licenses/GPL-2.0.txt","licenses/xterm-addon-fit.txt","licenses/xterm.txt","machine.js","manifest.webmanifest","runtime/browser-agent.js","runtime/linux-worker.js","runtime/linux.js","sources.html","storage.js","style.css"];
 self.addEventListener('install',event=>event.waitUntil((async()=>{
   const cache=await caches.open(CACHE);
   try{await cache.addAll(ASSETS);}catch(error){await caches.delete(CACHE);throw error;}

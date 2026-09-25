@@ -40,6 +40,9 @@ const publicRoot=path.join(root,'public');
 const assets=[];
 async function walk(dir,prefix=''){
   for(const entry of await fs.readdir(dir,{withFileTypes:true})){
+    // Pages does not serve dotfiles such as .nojekyll; they are host markers,
+    // not downloadable app assets. A 404 here would abort offline installation.
+    if(entry.name.startsWith('.'))continue;
     const name=prefix+entry.name;
     if(entry.isDirectory())await walk(path.join(dir,entry.name),name+'/');
     else if(!['sw.js','asset-manifest.json'].includes(name))assets.push(name);
