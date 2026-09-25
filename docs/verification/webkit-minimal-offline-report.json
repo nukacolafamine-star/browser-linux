@@ -1,0 +1,50 @@
+{
+  "purpose": "Minimal service worker navigation: no Linux, Wasm, shared memory, isolation headers, or asset cache",
+  "url": "http://127.0.0.1:49248/",
+  "startedAt": "2026-09-25T08:50:27.070Z",
+  "engines": [
+    {
+      "engine": "webkit",
+      "version": "26.6",
+      "failedRequests": [
+        {
+          "url": "http://127.0.0.1:49248/",
+          "error": {
+            "errorText": "WebKit encountered an internal error"
+          }
+        },
+        {
+          "url": "http://127.0.0.1:49248/",
+          "error": {
+            "errorText": "WebKit encountered an internal error"
+          }
+        }
+      ],
+      "onlineDocument": "Synthetic service worker document",
+      "offlineFetch": {
+        "error": "Load failed"
+      },
+      "offlineReload": {
+        "error": "page.reload: WebKit encountered an internal error\nCall log:\n\u001b[2m  - waiting for navigation until \"domcontentloaded\"\u001b[22m\n"
+      },
+      "currentURL": "http://127.0.0.1:49248/"
+    },
+    {
+      "engine": "chrome",
+      "version": "154.0.8037.57",
+      "failedRequests": [],
+      "onlineDocument": "Synthetic service worker document",
+      "offlineFetch": "<!doctype html><title>Worker response</title><p id=\"result\">Synthetic service worker document</p>",
+      "offlineReload": "Synthetic service worker document",
+      "currentURL": "http://127.0.0.1:49248/"
+    }
+  ],
+  "requests": [
+    "/",
+    "/sw.js",
+    "/",
+    "/favicon.ico",
+    "/sw.js"
+  ],
+  "finishedAt": "2026-09-25T08:50:28.138Z"
+}

@@ -14,6 +14,10 @@ The built app then passed the same six online boots with its real service worker
 
 ## Live GitHub Pages verification
 
+Version 0.1.1 was then verified at the public URL in fresh Chrome and WebKit sessions. The served kernel SHA-256 is `e325182240518e4cf2e226a37ff947b827b9d0677ba7e5afedf9558bb9eba441`, matching the tested compatibility transformation. WebKit passed six online boots (2.14–2.64 seconds), real commands and exact 150,000-byte file restoration after every reload. Chrome passed the live first-visit and offline-restoration test. See `verification/webkit-live-report.json` and `verification/live-pages-report.json`.
+
+The portable-WebKit offline-emulation failure also reproduces on a minimal service worker that returns synthetic HTML, without Linux or this application. Chrome passes that minimal test. This isolates the local testing limitation, but does not establish physical Safari offline support; see `verification/webkit-minimal-offline-report.json`.
+
 The deployed HTTPS site at https://nukacolafamine-star.github.io/browser-linux/ was tested in a fresh Chrome profile at a 390px touch viewport. The first visit reloaded once, enabled shared memory and booted the real kernel. A guest file was written and saved; an offline page reload booted Linux again and restored the exact contents. No uncaught browser errors were observed. See `verification/live-pages-report.json`.
 
 GitHub Pages returns 404 for `.nojekyll`, so host marker files are excluded from the offline cache. The Pages regression test now reproduces that behavior and passes eight checks. Physical iPhone Safari remains untested.

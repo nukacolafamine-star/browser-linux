@@ -1,0 +1,39 @@
+{
+  "sourceCommit": "28ef12bf61474f010be96db3cf6ed54bc9168fe3",
+  "target": "https://nukacolafamine-star.github.io/browser-linux/",
+  "engine": "Playwright WebKit on Windows, not physical iOS Safari",
+  "browser": "26.6",
+  "startedAt": "2026-09-25T08:51:59.322Z",
+  "finishedAt": "2026-09-25T08:52:18.593Z",
+  "passed": true,
+  "checks": [
+    "150000-byte patterned file write/read verified and saved",
+    "Real Linux cat command reads file created through desktop bridge",
+    "Real shell printf and uname commands completed",
+    "Five document reloads booted and restored all binary bytes exactly",
+    "No uncaught browser errors"
+  ],
+  "bootMilliseconds": [
+    2144.94,
+    2633.7000000000003,
+    2561.36,
+    2498.98,
+    2570.56,
+    2545.54
+  ],
+  "kernelSha256": "e325182240518e4cf2e226a37ff947b827b9d0677ba7e5afedf9558bb9eba441",
+  "offline": {
+    "requested": false,
+    "status": "not tested"
+  },
+  "errors": [],
+  "navigations": [
+    "https://nukacolafamine-star.github.io/browser-linux/",
+    "https://nukacolafamine-star.github.io/browser-linux/",
+    "https://nukacolafamine-star.github.io/browser-linux/",
+    "https://nukacolafamine-star.github.io/browser-linux/",
+    "https://nukacolafamine-star.github.io/browser-linux/",
+    "https://nukacolafamine-star.github.io/browser-linux/",
+    "https://nukacolafamine-star.github.io/browser-linux/"
+  ]
+}
