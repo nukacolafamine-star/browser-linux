@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
+import {prepareFirmwareProvenance} from './firmware-provenance.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const source = {
@@ -27,4 +28,5 @@ dockerfile += '\n' + await readFile(path.join(here, 'runtime-stage.Dockerfile'),
 await mkdir(path.join(here, 'generated'), { recursive: true });
 await writeFile(path.join(here, 'generated', 'runtime.Dockerfile'), dockerfile);
 await writeFile(path.join(here, 'generated', 'source-lock.json'), JSON.stringify(source, null, 2) + '\n');
+await prepareFirmwareProvenance(path.join(here, 'generated', 'firmware'), source.qemuCommit);
 console.log('Prepared pinned direct-QEMU runtime build; nothing installed or executed on the host.');

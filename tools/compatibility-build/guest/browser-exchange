@@ -1,0 +1,26 @@
+#!/bin/sh
+# QEMU exports only /exchange inside this browser instance, not host OS files.
+set -eu
+mkdir -p /mnt/browser
+modprobe 9p || true
+modprobe 9pnet_virtio || true
+if ! mount -t 9p -o trans=virtio,version=9p2000.L,msize=262144,cache=none browser /mnt/browser; then
+  printf 'BROWSER_LINUX_EXCHANGE_UNAVAILABLE\n' > /dev/ttyS0
+  exit 0
+fi
+mkdir -p /mnt/browser/.control
+chmod 700 /mnt/browser/.control
+printf 'browser-linux-exchange-v1\n' > /mnt/browser/.control/ready
+printf 'BROWSER_LINUX_EXCHANGE_READY mount=/mnt/browser\n' > /dev/ttyS0
+
+while sleep 1; do
+  if [ -f /mnt/browser/.control/shutdown ]; then
+    rm /mnt/browser/.control/shutdown
+    printf 'BROWSER_LINUX_SHUTDOWN_REQUESTED\n' > /dev/ttyS0
+    # BusyBox poweroff asks PID 1 to run inittab shutdown actions. The browser
+    # must wait for QEMU exit before saving its disk snapshot.
+    sync
+    /sbin/poweroff
+    exit 0
+  fi
+done

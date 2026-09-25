@@ -40,7 +40,9 @@ jobs:
           build-args: |
             QEMU_REPO_VERSION=8604ed49a3cde392890b014a8d5a959c8a2fe72a
             EMSDK_VERSION_QEMU=4.0.10
-          cache-from: type=gha,scope=browser-linux-qemu-proof
+          cache-from: |
+            type=gha,scope=browser-linux-qemu-dependencies
+            type=gha,scope=browser-linux-qemu-proof
           cache-to: type=gha,mode=max,scope=browser-linux-qemu-dependencies
           outputs: type=cacheonly
       - name: Compile x86_64 emulator for the browser

@@ -13,13 +13,17 @@ if [ ! -e /dev/dri/card0 ]; then
 fi
 
 # The emulated serial console owns the login session, so no physical VT is used.
-SEATD_VTBOUND=0 seatd -g root -s "$SEATD_SOCK" > /var/log/seatd.log 2>&1 &
+SEATD_VTBOUND=0 seatd -g root > /var/log/seatd.log 2>&1 &
 seatd_pid=$!
 cleanup() { kill "$seatd_pid" 2>/dev/null || true; }
 trap cleanup EXIT HUP INT TERM
 i=0
 while [ ! -S "$SEATD_SOCK" ]; do
-  kill -0 "$seatd_pid" 2>/dev/null || exit 1
+  if ! kill -0 "$seatd_pid" 2>/dev/null; then
+    printf 'BROWSER_LINUX_GRAPHICS_FAILED: seatd exited\n' > /dev/ttyS0
+    cat /var/log/seatd.log > /dev/ttyS0
+    exit 1
+  fi
   i=$((i + 1))
   [ "$i" -lt 100 ] || exit 1
   sleep 0.1

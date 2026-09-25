@@ -21,6 +21,9 @@ args = parser.parse_args()
 artifact = args.artifact.resolve()
 proof = artifact / "native-proof"
 proof.mkdir(exist_ok=True)
+exchange = proof / "exchange"
+exchange.mkdir(exist_ok=True)
+(exchange / "incoming.txt").write_text("native exchange input\n", encoding="utf-8")
 sock_path = proof / "qmp.sock"
 report = {"scope": "Native QEMU TCG on isolated CI; not browser acceptance", "passed": False, "checks": []}
 serial_chunks = []
@@ -42,6 +45,8 @@ def wait_for(predicate, timeout, description):
             return
         if process.poll() is not None:
             raise RuntimeError(f"QEMU exited {process.returncode} while waiting for {description}")
+        if "BROWSER_LINUX_GRAPHICS_FAILED" in serial():
+            raise RuntimeError(f"Guest reported a graphics startup failure while waiting for {description}")
         time.sleep(0.05)
     raise TimeoutError(f"Timed out waiting for {description}")
 
@@ -84,6 +89,7 @@ try:
             "-drive", f"file={artifact / 'rootfs.img'},if=virtio,format=raw,snapshot=on",
             "-append", "console=ttyS0,115200 root=/dev/vda rootfstype=ext4 rw",
             "-vga", "none", "-device", "virtio-vga", "-display", "none", "-serial", "stdio", "-monitor", "none",
+            "-virtfs", f"local,path={exchange},mount_tag=browser,security_model=passthrough,id=browser",
             "-qmp", f"unix:{sock_path},server=on,wait=off", "-nic", "none", "-no-reboot"]
     report["arguments"] = argv
     process = subprocess.Popen(argv, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
@@ -130,6 +136,20 @@ try:
     wait_for(lambda: "GUEST_GRAPHICAL_INPUT_OK" in serial(), 10, "graphical keyboard command verified through serial")
     report["checks"].append("Keyboard input through virtual hardware executed in graphical terminal; serial read its file")
     command("screendump", {"filename": str(proof / "weston-after-input.ppm")})
+
+    wait_for(lambda: "BROWSER_LINUX_EXCHANGE_READY" in serial(), 10, "optional in-tab file exchange mounted")
+    serial_command("if test \"$(cat /mnt/browser/incoming.txt)\" = 'native exchange input'; then printf 'GUEST_%s\\n' EXCHANGE_READ_OK; fi; printf 'guest exchange output\\n' > /mnt/browser/outgoing.txt")
+    wait_for(lambda: "GUEST_EXCHANGE_READ_OK" in serial(), 10, "guest reading the shared exchange")
+    wait_for(lambda: (exchange / "outgoing.txt").exists(), 10, "guest writing the shared exchange")
+    assert (exchange / "outgoing.txt").read_text() == "guest exchange output\n"
+    report["checks"].append("Virtio 9P exchange verified in both directions with an isolated CI directory")
+    (exchange / ".control" / "shutdown").write_text("request\n", encoding="utf-8")
+    process.wait(timeout=20)
+    reader.join(timeout=1)
+    assert process.returncode == 0, f"Unclean QEMU exit: {process.returncode}"
+    assert "BROWSER_LINUX_SHUTDOWN_REQUESTED" in serial(), "Guest did not acknowledge control request"
+    assert not (exchange / ".control" / "shutdown").exists(), "Guest did not consume control request"
+    report["checks"].append("Control-file request caused guest sync/shutdown and a clean QEMU exit")
     report["passed"] = True
 except Exception as error:
     report["error"] = str(error)

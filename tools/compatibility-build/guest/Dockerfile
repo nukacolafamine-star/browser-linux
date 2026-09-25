@@ -9,15 +9,17 @@ RUN apk add --no-cache \
       font-dejavu && \
     mkdir -p /etc/xdg/weston /usr/local/sbin /usr/share/browser-linux /var/log
 COPY inittab /etc/inittab
-COPY browser-boot browser-weston verify-wayland /usr/local/sbin/
+COPY browser-boot browser-weston browser-exchange verify-wayland /usr/local/sbin/
 COPY weston.ini /etc/xdg/weston/weston.ini
-RUN chmod 755 /usr/local/sbin/browser-boot /usr/local/sbin/browser-weston /usr/local/sbin/verify-wayland && \
+RUN chmod 755 /usr/local/sbin/browser-boot /usr/local/sbin/browser-weston /usr/local/sbin/browser-exchange /usr/local/sbin/verify-wayland && \
     printf '%s\n' 'browser-linux-wayland' > /etc/hostname && \
     printf '%s\n' 'Local Linux Wayland proof. CPU rendering; guest GPU acceleration unavailable.' > /etc/motd && \
     apk info -v | sort > /usr/share/browser-linux/package-versions.txt && \
     kernel_version="$(ls /lib/modules)" && \
     test "$(printf '%s\n' "$kernel_version" | wc -l)" = 1 && \
     grep -q '^CONFIG_DRM_VIRTIO_GPU=m$' "/boot/config-$kernel_version" && \
+    grep -q '^CONFIG_NET_9P_VIRTIO=m$' "/boot/config-$kernel_version" && \
+    grep -q '^CONFIG_9P_FS=m$' "/boot/config-$kernel_version" && \
     mkinitfs -F 'base virtio ext4' -o /boot/initramfs-virt "$kernel_version" && \
     weston --version && \
     test -f /usr/lib/libweston-14/drm-backend.so && \
