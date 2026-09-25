@@ -1,5 +1,8 @@
 name: Verify optional Java25 in the Linux guest
 on:
+  push:
+    branches: [feature/portable-compatibility]
+    paths: ['.github/workflows/java25.yml']
   workflow_dispatch:
     inputs:
       guest_run:
@@ -28,7 +31,7 @@ jobs:
         with:
           name: browser-linux-guest-proof
           path: guest-artifact
-          run-id: ${{ inputs.guest_run }}
+          run-id: ${{ inputs.guest_run || '36157834294' }}
           github-token: ${{ github.token }}
       - name: Install native emulator only on the isolated CI runner
         run: |
