@@ -89,11 +89,14 @@ def type_graphical(text):
 
 try:
     # Snapshot mode keeps the built artifact's disk bytes unchanged.
-    argv = ["qemu-system-x86_64", "-M", "pc", "-m", "512M", "-smp", "1", "-accel", "tcg,thread=single",
+    argv = ["qemu-system-x86_64", "-M", "pc,i8042=off", "-m", "512M", "-smp", "1", "-accel", "tcg,thread=single",
+            "-cpu", "qemu64,-svm,-vmx", "-nodefaults",
             "-kernel", str(artifact / "vmlinuz-virt"), "-initrd", str(artifact / "initramfs-virt"),
             "-drive", f"file={artifact / 'rootfs.img'},if=virtio,format=raw,snapshot=on",
             "-append", "console=ttyS0,115200 root=/dev/vda rootfstype=ext4 rw",
             "-vga", "none", "-device", "virtio-vga", "-display", "none", "-serial", "stdio", "-monitor", "none",
+            "-parallel", "none", "-device", "virtio-keyboard-pci", "-device", "virtio-tablet-pci",
+            "-object", "rng-random,id=browser-rng,filename=/dev/urandom", "-device", "virtio-rng-pci,rng=browser-rng",
             # Native CI is unprivileged; ignore host chown failures. Browser
             # MEMFS uses passthrough because its ownership is virtual in-tab.
             "-virtfs", f"local,path={exchange},mount_tag=browser,security_model=none,id=browser",
@@ -121,10 +124,13 @@ try:
     report["startupSeconds"] = round(time.monotonic() - started, 3)
     report["checks"].append("Real guest kernel booted; Weston socket and terminal processes started")
 
-    serial_command("printf 'GUEST_%s\\n' SERIAL_OK; uname -a; ps; ls -l /dev/dri /run/user/0; cat /var/log/weston.log")
+    serial_command("printf 'GUEST_%s\\n' SERIAL_OK; uname -a; ps; ls -l /dev/dri /run/user/0; cat /proc/bus/input/devices /proc/modules /var/log/weston.log")
     wait_for(lambda: "GUEST_SERIAL_OK" in serial(), 10, "serial shell command")
     wait_for(lambda: re.search(r"(Pixman|pixman) renderer", serial()) is not None, 10, "Pixman renderer log")
     report["checks"].append("Independent serial shell verified DRM, processes, socket and Pixman renderer log")
+    wait_for(lambda: "QEMU Virtio Keyboard" in serial() and "QEMU Virtio Tablet" in serial(), 10,
+             "real virtio keyboard and tablet registration")
+    report["checks"].append("Virtio keyboard and tablet registered with legacy PS/2 and USB controllers disabled")
     time.sleep(1)
     screenshot = proof / "weston.ppm"
     command("screendump", {"filename": str(screenshot)})

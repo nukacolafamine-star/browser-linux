@@ -18,6 +18,7 @@ RUN chmod 755 /usr/local/sbin/browser-boot /usr/local/sbin/browser-weston /usr/l
     kernel_version="$(ls /lib/modules)" && \
     test "$(printf '%s\n' "$kernel_version" | wc -l)" = 1 && \
     grep -q '^CONFIG_DRM_VIRTIO_GPU=m$' "/boot/config-$kernel_version" && \
+    grep -q '^CONFIG_VIRTIO_INPUT=m$' "/boot/config-$kernel_version" && \
     grep -q '^CONFIG_NET_9P_VIRTIO=m$' "/boot/config-$kernel_version" && \
     grep -q '^CONFIG_9P_FS=m$' "/boot/config-$kernel_version" && \
     mkinitfs -F 'base virtio ext4' -o /boot/initramfs-virt "$kernel_version" && \

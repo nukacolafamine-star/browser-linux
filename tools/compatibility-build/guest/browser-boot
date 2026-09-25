@@ -17,11 +17,10 @@ printf 'Rendering: Weston Pixman on virtual DRM; guest GPU acceleration unavaila
 # Virtio modules belong to this guest kernel. They do not touch the host OS.
 modprobe virtio_gpu || true
 modprobe virtio_rng || true
+modprobe virtio_input || true
 modprobe evdev || true
-modprobe usbhid || true
-modprobe i8042 || true
-modprobe atkbd || true
-modprobe psmouse || true
+# Keyboard and absolute pointer use virtio-input directly. The emulator does
+# not expose USB/xHCI or legacy PS/2 input, so those drivers need no preload.
 /sbin/udevd --daemon
 # Only desktop devices need udev properties. Triggering every virtual PCI/ACPI
 # device also loads unused storage and nested-virtualization drivers, which is
