@@ -1,0 +1,145 @@
+{
+  "project": "Browser Linux",
+  "version": "0.1.0",
+  "upstream": {
+    "repository": "https://github.com/joelseverin/linux-wasm",
+    "artifactRef": "855319c0fed3b98e23979e364a1d6270322d3975",
+    "artifactBranch": "gh-pages",
+    "sourceRecipeRef": "719cd8d974dc37181204eb2db1d9b96dad260c9a",
+    "taskReleaseFix": "d94d6b5d7c9c937c7a7158055b8ef56f75d90a8a"
+  },
+  "kernel": "6.4.16-00012-gf3e782cb608b",
+  "kernelSourceRebuiltHere": false,
+  "sourceBundle": {
+    "url": "https://github.com/nukacolafamine-star/browser-linux/releases/download/v0.1.0/browser-linux-sources-0.1.0.tar",
+    "bytes": 275240960,
+    "sha256": "9606fbd908ed4d362a025d2da72fa27c0181d985cceaa4a00eb0828e8c127b58",
+    "verification": "All base archives and 15 component patches verified; kernel source patch chain ends at the running binary revision. Byte-for-byte binary reproduction not performed."
+  },
+  "sourceRecipeBases": {
+    "linux": "v6.4.16",
+    "llvm": "llvmorg-18.1.2",
+    "musl": "v1.2.5",
+    "busybox": "1_36_1"
+  },
+  "runtimeDependencies": {
+    "@xterm/xterm": "6.0.0",
+    "@xterm/addon-fit": "0.11.0"
+  },
+  "kernelTransformation": "Remove .debug_* custom sections only. Preserve executable and other custom sections.",
+  "files": {
+    "vendor/linux-wasm/vmlinux.original.wasm": {
+      "bytes": 29966656,
+      "sha256": "3fa6b28252b0d72c826991a8e2e95a9919a9e8ea46d2d38a6d28b91011353d39"
+    },
+    "vendor/linux-wasm/initramfs.cpio.gz": {
+      "bytes": 663289,
+      "sha256": "ad4b9a61052f91c61cff45df05dd60476ed1eeb79ca0e9773d5c9b6979b763c6"
+    },
+    "vendor/linux-wasm/linux.js": {
+      "bytes": 7841,
+      "sha256": "9fd3191533a1184f59ad7fe0afa5380310002a1b01478515f2e03de18238f559"
+    },
+    "vendor/linux-wasm/linux-worker.js": {
+      "bytes": 24299,
+      "sha256": "280aae4a0592514a21ee07f7a6c6de932424e62b45fccf8942047ae4a057ae93"
+    },
+    "vendor/linux-wasm/source.tar": {
+      "bytes": 921600,
+      "sha256": "b104fa0e0a304c9e09409cae6f8baac04b9d89dff686e495f6bb3dfefc6211a3"
+    }
+  },
+  "servedAssets": {
+    "version": "23ba248252515fc5",
+    "assets": {
+      ".nojekyll": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "app.js": {
+        "bytes": 18847,
+        "sha256": "e168e51c71f46ae7222810ae65a21f89c3e369a9899115634ad300f8a4df7077"
+      },
+      "assets/addon-fit.js": {
+        "bytes": 1521,
+        "sha256": "ba3ea256ce0620a0992a197d6c9baea64823fc93d8da07a9e366ca9943c18527"
+      },
+      "assets/initramfs.cpio.gz": {
+        "bytes": 660864,
+        "sha256": "c4012121c503e40a858e77f70d47968467bc1871421ba23e43ac691bb57cd56a"
+      },
+      "assets/vmlinux.wasm": {
+        "bytes": 3710340,
+        "sha256": "a4a03de3418c729997df707946d71dafe32d5655febcb3d9ec1987fe832545f1"
+      },
+      "assets/xterm.css": {
+        "bytes": 7112,
+        "sha256": "854a7c0fb70e8b1a083c16797ab827299fb18744f5ad34f227b48337e33293c6"
+      },
+      "assets/xterm.js": {
+        "bytes": 488663,
+        "sha256": "14903579ff54664cd72f8e8699e6961a6272c21863ec1c3b118cdc8af5d4a972"
+      },
+      "bootstrap.js": {
+        "bytes": 2723,
+        "sha256": "cbc4f7f4872a435b81d89aaef74ecd37dca14c69b54fa254252f4749b25e1abc"
+      },
+      "icon.svg": {
+        "bytes": 251,
+        "sha256": "60fff2efb7d566c161f49fdd4529f7349995b78ce2984376115936612ad53812"
+      },
+      "index.html": {
+        "bytes": 8433,
+        "sha256": "4fabb5d90e7290c05f8140c0d744d6d83db62a20fa367e048324983c8847c18f"
+      },
+      "integrity.js": {
+        "bytes": 872,
+        "sha256": "43076d045ca0428556bea346dddb95739ec1918f5c427262992e66eaa7105cca"
+      },
+      "licenses/GPL-2.0.txt": {
+        "bytes": 17984,
+        "sha256": "edaef632cbb643e4e7a221717a6c441a4c1a7c918e6e4d56debc3d8739b233f6"
+      },
+      "licenses/xterm-addon-fit.txt": {
+        "bytes": 1103,
+        "sha256": "e256f01188af527e4d06d21d06fbf785ae9c50d4b328bf03cbe0ba7f0aa4228f"
+      },
+      "licenses/xterm.txt": {
+        "bytes": 1261,
+        "sha256": "b569f629d00f2626a8100df2a1798210535621e42164dfd426a6fe5aac7b0ccd"
+      },
+      "machine.js": {
+        "bytes": 6570,
+        "sha256": "6acaf0d1155a162b9d078e1ba49e3d0725920cc6519796ebad6214d0863a3240"
+      },
+      "manifest.webmanifest": {
+        "bytes": 221,
+        "sha256": "3631ad919d4db04b8b930025eb3cb82742749bbd111b106f2284fb30940c7d29"
+      },
+      "runtime/browser-agent.js": {
+        "bytes": 7926,
+        "sha256": "fc98d743a90df9b85a3db1b94aa0053e36b0957843b652da1d27b89b9e390928"
+      },
+      "runtime/linux-worker.js": {
+        "bytes": 24836,
+        "sha256": "cbc2e6f4f3202df58c889e66ec721407c2bf8dae8dca7464064f120463f8d90d"
+      },
+      "runtime/linux.js": {
+        "bytes": 10120,
+        "sha256": "640b74d8f8ee9d4384cde830e0f7538ba2c6c34f6a8726d6bdce7cc263817173"
+      },
+      "sources.html": {
+        "bytes": 1909,
+        "sha256": "809ed99b2e2205311e8c8e8a905270ddb24f77f2f91331de4855de6d75fc2ce9"
+      },
+      "storage.js": {
+        "bytes": 3635,
+        "sha256": "0e49f025bff05dcd60d0d08a3938c308769d89bdaad92286222c188fba5eb998"
+      },
+      "style.css": {
+        "bytes": 10704,
+        "sha256": "409fd6e865c0e661ebef84004cee3a78df9f8f866c3c137c1fc65ca0f4934b3d"
+      }
+    }
+  }
+}

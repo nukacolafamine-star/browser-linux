@@ -1,0 +1,16 @@
+#!/bin/sh
+mount -t proc none /proc
+mount -t sysfs none /sys
+mkdir -p /dev/pts /tmp /home/web /run
+mount -t devpts none /dev/pts
+hostname browser-linux
+export HOME=/home/web USER=web TERM=xterm-256color
+export PATH=/bin:/sbin:/usr/bin:/usr/sbin
+export PS1='\u@browser-linux:\w\$ '
+/bin/browser-agent &
+cd /home/web
+echo
+echo 'Browser Linux | Linux 6.4 / wasm32'
+echo 'Your workspace: /home/web'
+echo
+exec /sbin/init -s

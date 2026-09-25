@@ -1,0 +1,25 @@
+{
+  "browser": "154.0.8037.57",
+  "checks": [],
+  "errors": [],
+  "failure": "page.waitForFunction: Timeout 60000ms exceeded.",
+  "diagnostics": {
+    "state": "error",
+    "offline": "Available offline",
+    "logs": [
+      "Starting cpu 0 with init_task 318080",
+      "Starting cpu 1 (2988672) with start stack 2988672",
+      "Starting cpu 2 (3005056) with start stack 3005056",
+      "Starting cpu 3 (3013248) with start stack 3013248"
+    ],
+    "output": "Linux version 6.4.16-00012-gf3e782cb608b (joel@joel-linux) (clang version 18.1.2 (https://github.com/llvm/llvm-project.git 655e5d880b53f04d4978d0ab4ac9a333f35c48a9), LLD 18.1.2) #26 SMP Fri Oct 31 16:44:59 CET 2025\r\nZone ranges:\r\n  Normal   [mem 0x0000000000010000-0x000000000fd6ffff]\r\nMovable zone start for each node\r\nEarly memory node ranges\r\n  node   0: [mem 0x0000000000010000-0x000000000fd6ffff]\r\nInitmem setup node 0 [mem 0x0000000000010000-0x000000000fd6ffff]\r\nsmp_init_cpus: Core Count = 64\r\npercpu: max_distance=0x240000 too large for vmalloc space 0x0\r\npercpu: Embedded 9 pages/cpu s12496 r0 d24368 u36864\r\npercpu: wasting 448 pages per chunk\r\nKernel command line: maxcpus=3 nohz_full=2-63 rcu_nocbs=2-63 root=/dev/ram0 rootfstype=ramfs init=/init console=hvc console=ttyS0\r\nprintk: log_buf_len individual max cpu contribution: 4096 bytes\r\nprintk: log_buf_len total cpu_extra contributions: 258048 bytes\r\nprintk: log_buf_len min size: 131072 bytes\r\nprintk: log_buf_len: 524288 bytes\r\nprintk: early log buf free: 129436(98%)\r\nDentry cache hash table entries: 32768 (order: 5, 131072 bytes, linear)\r\nInode-cache hash table entries: 16384 (order: 4, 65536 bytes, linear)\r\nBuilt 1 zonelists, mobility grouping on.  Total pages: 64357\r\nmem auto-init: stack:all(zero), heap alloc:off, heap free:off\r\nMemory: 250236K/259456K available (0K kernel code, 32K rwdata, 200K rodata, 32K init, 7K bss, 9220K reserved, 0K cma-reserved)\r\nrcu: Hierarchical RCU implementation.\r\nrcu: \tRCU event tracing is enabled.\r\nrcu: RCU calculated value of scheduler-enlistment delay is 10 jiffies.\r\nNR_IRQS: 32\r\nNO_HZ: Full dynticks CPUs: 2-63.\r\nrcu: \tOffload RCU callbacks from CPUs: 2-63.\r\nrcu: srcu_init: Setting srcu_struct sizes based on contention.\r\nclocksource: wasm_cpu_clock: mask: 0xffffffffffffffff max_cycles: 0x1cd42e4dffb, max_idle_ns: 881590591483 ns\r\nConsole: colour dummy device 80x25\r\nprintk: console [hvc0] enabled\r\npid_max: default: 32768 minimum: 512\r\nMount-cache hash table entries: 1024 (order: 0, 4096 bytes, linear)\r\nMountpoint-cache hash table entries: 1024 (order: 0, 4096 bytes, linear)\r\nrcu: Hierarchical SRCU implementation.\r\nrcu: \tMax phase no-delay instances is 1000.\r\nsmp: Bringing up secondary CPUs ...\r\nsmp: Brought up 1 node, 3 CPUs\r\nSMP: Total of 3 processors activated.\r\nclocksource: jiffies: mask: 0xffffffff max_cycles: 0xffffffff, max_idle_ns: 19112604462750000 ns\r\nfutex hash table entries: 16384 (order: 8, 1048576 bytes, linear)\r\nclocksource: Switched to clocksource wasm_cpu_clock\r\nworkingset: timestamp_bits=30 max_order=16 bucket_order=0\r\nio scheduler mq-deadline registered\r\nio scheduler kyber registered\r\nUnpacking initramfs...\r\nFreeing initrd memory: 644K\r\nFreeing unused kernel image (initmem) memory: 32K\r\nThis architecture does not have kernel memory protection.\r\nRun /init as init process\r\n\r\nBrowser Linux | Linux 6.4 / wasm32\r\nYour workspace: /home/web\r\n\r\n",
+    "registrations": [
+      {
+        "active": "activated"
+      }
+    ],
+    "caches": [
+      "browser-linux-86866cd4af9dc6b5"
+    ]
+  }
+}

@@ -1,0 +1,105 @@
+{
+  "url": "http://127.0.0.1:63571/browser-linux/",
+  "startedAt": "2026-09-25T07:46:37.080Z",
+  "assetVersion": "2cb68854db9cc70a",
+  "checks": [
+    {
+      "name": "test server provides no isolation headers",
+      "passed": true
+    },
+    {
+      "name": "first visit registers worker, reloads once, and boots genuine Linux",
+      "passed": true,
+      "detail": {
+        "isolated": true,
+        "shared": true,
+        "controller": "http://127.0.0.1:63571/browser-linux/sw.js",
+        "bootMs": 945.0850000083447,
+        "memoryBytes": 134217728
+      }
+    },
+    {
+      "name": "prefixed cached documents, workers and Wasm receive isolation headers",
+      "passed": true,
+      "detail": {
+        "index.html": {
+          "status": 200,
+          "coop": "same-origin",
+          "coep": "require-corp",
+          "type": "text/html; charset=utf-8"
+        },
+        "runtime/linux-worker.js": {
+          "status": 200,
+          "coop": "same-origin",
+          "coep": "require-corp",
+          "type": "text/javascript; charset=utf-8"
+        },
+        "assets/vmlinux.wasm": {
+          "status": 200,
+          "coop": "same-origin",
+          "coep": "require-corp",
+          "type": "application/wasm"
+        }
+      }
+    },
+    {
+      "name": "phone editor writes to Linux and saved file survives document reload",
+      "passed": true
+    },
+    {
+      "name": "offline reload retains isolation, boots Linux and restores exact saved file",
+      "passed": true
+    },
+    {
+      "name": "390px touch viewport has no horizontal document overflow",
+      "passed": true
+    },
+    {
+      "name": "no uncaught browser errors",
+      "passed": true
+    }
+  ],
+  "errors": [],
+  "navigations": [
+    "http://127.0.0.1:63571/browser-linux/",
+    "http://127.0.0.1:63571/browser-linux/",
+    "http://127.0.0.1:63571/browser-linux/",
+    "http://127.0.0.1:63571/browser-linux/"
+  ],
+  "browser": "154.0.8037.57",
+  "passed": true,
+  "finishedAt": "2026-09-25T07:46:41.595Z",
+  "serverRequests": [
+    "/browser-linux/",
+    "/browser-linux/",
+    "/browser-linux/assets/xterm.css",
+    "/browser-linux/style.css",
+    "/browser-linux/assets/xterm.js",
+    "/browser-linux/assets/addon-fit.js",
+    "/browser-linux/bootstrap.js",
+    "/browser-linux/runtime/linux.js",
+    "/browser-linux/icon.svg",
+    "/browser-linux/sw.js",
+    "/browser-linux/",
+    "/browser-linux/.nojekyll",
+    "/browser-linux/app.js",
+    "/browser-linux/assets/addon-fit.js",
+    "/browser-linux/assets/initramfs.cpio.gz",
+    "/browser-linux/icon.svg",
+    "/browser-linux/assets/vmlinux.wasm",
+    "/browser-linux/assets/xterm.css",
+    "/browser-linux/assets/xterm.js",
+    "/browser-linux/bootstrap.js",
+    "/browser-linux/icon.svg",
+    "/browser-linux/index.html",
+    "/browser-linux/integrity.js",
+    "/browser-linux/machine.js",
+    "/browser-linux/manifest.webmanifest",
+    "/browser-linux/runtime/browser-agent.js",
+    "/browser-linux/runtime/linux-worker.js",
+    "/browser-linux/runtime/linux.js",
+    "/browser-linux/storage.js",
+    "/browser-linux/style.css",
+    "/browser-linux/sw.js"
+  ]
+}

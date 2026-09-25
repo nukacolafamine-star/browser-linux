@@ -1,0 +1,43 @@
+import {chromium} from 'playwright';import assert from 'node:assert/strict';import fs from 'node:fs/promises';import path from 'node:path';
+await fs.mkdir('.cache/tmp',{recursive:true});process.env.TEMP=path.resolve('.cache/tmp');process.env.TMP=process.env.TEMP;await fs.mkdir('test-results',{recursive:true});
+const browser=await chromium.launch({channel:'chrome',headless:true});const context=await browser.newContext({viewport:{width:1440,height:960},acceptDownloads:true});
+const report={browser:browser.version(),assetVersion:JSON.parse(await fs.readFile('public/asset-manifest.json','utf8')).version,checks:[],errors:[]};
+const record=(name,detail)=>{report.checks.push({name,detail,passed:true});console.log('PASS',name,detail||'');};
+const page=await context.newPage();page.on('pageerror',e=>report.errors.push(e.message));
+const booted=async()=>{await page.waitForFunction(()=>window.machine?.state==='running',null,{timeout:60000});await page.waitForFunction(()=>machine.output.includes('root@browser-linux:~#'),null,{timeout:15000});};
+const rpc=(method,args)=>page.evaluate(({method,args})=>machine.rpc(method,args),{method,args});
+const shell=async(command,marker)=>{await page.evaluate(({command,marker})=>machine.os.key_input(command+'; echo '+marker+'\n'),{command,marker});await page.waitForFunction(marker=>machine.output.includes('\r\n'+marker+'\r\n'),marker,{timeout:30000});};
+try{
+  await page.goto('http://127.0.0.1:4173');await booted();
+  const info=await rpc('info');assert.match(info.uname,/Linux version 6\.4/);record('real Linux kernel boot',await page.evaluate(()=>({bootMs:machine.bootMs,memoryBytes:machine.os.stats().memoryBytes})));
+  await shell("printf 'from real Linux\n' > /home/web/terminal.txt",'SHELL_FILE_OK');
+  assert.equal(new TextDecoder().decode(Uint8Array.from(Object.values(await rpc('read',{path:'/home/web/terminal.txt'})))),'from real Linux\n');record('terminal writes visible through kernel filesystem bridge');
+  await page.locator('[data-view="files"]').click();await page.getByRole('button',{name:'▤ terminal.txt',exact:true}).click();
+  assert.equal(await page.locator('#editor').inputValue(),'from real Linux\n');
+  await page.locator('#editor').fill('Edited graphically — Linux sees this.\n');await page.locator('#save-file').click();await page.waitForFunction(()=>document.querySelector('#editor-state').textContent==='Saved');
+  await shell('cat /home/web/terminal.txt','GUI_FILE_OK');assert.match(await page.evaluate(()=>machine.output),/Edited graphically — Linux sees this/);record('graphical editor and terminal share real files');
+  const binary=Array.from({length:150000},(_,i)=>i%256);
+  await page.evaluate(async data=>machine.write('/home/web/binary.dat',Uint8Array.from(data)),binary);
+  const read=await page.evaluate(async()=>Array.from(await machine.rpc('read',{path:'/home/web/binary.dat'})));assert.deepEqual(read,binary);record('chunked binary transfer',`${binary.length} bytes`);
+  await rpc('mkdir',{path:'/home/web/nested'});await rpc('symlink',{path:'/home/web/link',target:'/etc'});
+  await assert.rejects(()=>page.evaluate(()=>machine.write('/home/web/link/test','blocked')),/symbolic links/);record('workspace writes reject symlink escape');
+  await page.evaluate(()=>machine.write('/home/web/<img onerror=alert(1)>','safe'));
+  await page.locator('[data-view="files"]').click();await page.locator('#refresh-files').click();assert.equal(await page.locator('#file-list img').count(),0);record('filenames render as text');
+  const before=await page.evaluate(()=>machine.save());await page.reload();await booted();
+  assert.deepEqual(await page.evaluate(async()=>Array.from(await machine.rpc('read',{path:'/home/web/binary.dat'}))),binary);record('workspace survives a fresh kernel boot');
+  const second=await context.newPage();await second.goto('http://127.0.0.1:4173');await second.waitForFunction(()=>machine?.state==='error');assert.match(await second.locator('#error-message').textContent(),/another tab/);await second.close();await page.bringToFront();record('second tab cannot overwrite active workspace');
+  const downloadPromise=page.waitForEvent('download');await page.locator('#export-workspace').click();const download=await downloadPromise;const backupPath='test-results/export.json';await download.saveAs(backupPath);
+  const exported=JSON.parse(await fs.readFile(backupPath,'utf8'));assert.equal(exported.version,1);assert.deepEqual(exported.entries.find(e=>e.path==='/home/web/binary.dat').data,binary);record('portable backup contains exact binary file data');
+  await page.waitForFunction(()=>document.querySelector('#offline-state').textContent==='Available offline',null,{timeout:30000,polling:100});await context.setOffline(true);await page.reload();await booted();
+  assert.match((await rpc('info')).uname,/Linux/);record('offline reload boots kernel and restores saved files');await context.setOffline(false);
+  await page.screenshot({path:'test-results/desktop.png'});
+  await page.setViewportSize({width:390,height:844});await page.locator('[data-view="files"]').click();await page.screenshot({path:'test-results/mobile-files.png'});
+  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth),true);record('390px mobile layout has no page overflow');
+  await page.locator('[data-view="terminal"]').click();await page.screenshot({path:'test-results/mobile.png'});
+  await page.setViewportSize({width:1440,height:960});await page.locator('[data-view="machine"]').click();await page.screenshot({path:'test-results/machine.png'});
+  assert.deepEqual(report.errors,[]);record('no uncaught browser errors');
+}catch(error){
+  report.failure=error.message;
+  report.diagnostics=await page.evaluate(async()=>({state:machine.state,offline:document.querySelector('#offline-state').textContent,logs:machine.logs.slice(-12),output:machine.output.slice(-3000),registrations:(await navigator.serviceWorker.getRegistrations()).map(r=>({active:r.active?.state,installing:r.installing?.state,waiting:r.waiting?.state})),caches:await caches.keys()})).catch(()=>null);
+  console.log('DIAGNOSTICS',JSON.stringify(report.diagnostics));throw error;
+}finally{await fs.writeFile('test-results/browser-report.json',JSON.stringify(report,null,2));await browser.close();}

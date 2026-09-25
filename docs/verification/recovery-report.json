@@ -1,0 +1,18 @@
+[
+  {
+    "check": "injected restore corruption stops Linux and preserves saved bytes",
+    "passed": true
+  },
+  {
+    "check": "last good backup remains exportable while guest is stopped",
+    "passed": true
+  },
+  {
+    "check": "retry restores original workspace after rejected restore",
+    "passed": true
+  },
+  {
+    "check": "ten page reloads restore nested files and exact 150000-byte binary",
+    "passed": true
+  }
+]

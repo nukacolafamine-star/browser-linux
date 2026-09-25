@@ -1,0 +1,25 @@
+[
+  {
+    "check": "backup restore UI replaces workspace exactly",
+    "passed": true
+  },
+  {
+    "check": "128 MiB kernel boot",
+    "passed": true
+  },
+  {
+    "check": "Linux BusyBox hashes 8 MiB through pipe",
+    "passed": true,
+    "wallMs": 407
+  },
+  {
+    "check": "chrome kernel and desktop",
+    "version": "154.0.8037.57",
+    "passed": true
+  },
+  {
+    "check": "msedge kernel and desktop",
+    "version": "153.0.4234.48",
+    "passed": true
+  }
+]

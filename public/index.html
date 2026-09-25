@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#10131c"><meta name="description" content="A local Linux workstation powered by a real WebAssembly kernel.">
+  <title>Browser Linux</title><link rel="icon" href="icon.svg" type="image/svg+xml"><link rel="manifest" href="manifest.webmanifest">
+  <link rel="stylesheet" href="assets/xterm.css"><link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand"><img src="icon.svg" alt="" width="32" height="32"><div>Browser Linux <span class="release">EXPERIMENTAL · 0.1</span></div></div>
+    <div id="status" role="status" class="status">Starting Linux</div>
+    <div class="top-actions"><button id="save-workspace" class="primary" disabled>Save workspace</button><button id="export-workspace" disabled>Export backup</button></div>
+  </header>
+  <div class="layout">
+    <aside class="sidebar">
+      <p class="eyebrow">WORKSTATION</p>
+      <nav aria-label="Applications">
+        <button data-view="terminal" class="nav-button selected"><span class="glyph">&gt;_</span>Terminal <kbd>1</kbd></button>
+        <button data-view="files" class="nav-button"><span class="glyph">▤</span>Files <kbd>2</kbd></button>
+        <button data-view="editor" class="nav-button"><span class="glyph">▱</span>Editor <kbd>3</kbd></button>
+        <button data-view="machine" class="nav-button"><span class="glyph">◫</span>Machine <kbd>4</kbd></button>
+      </nav>
+      <div class="sidebar-bottom"><span class="eyebrow">LOCAL WORKSPACE</span><code>/home/web</code><p id="saved-state">Waiting for Linux</p><p id="offline-state" class="muted">Checking offline support</p><button id="about-button" class="text-button">About this build ↗</button></div>
+    </aside>
+    <main>
+      <div id="startup-panel" class="startup-panel" role="status"><p class="eyebrow">BROWSER LINUX</p><h1>Preparing your workstation</h1><p id="startup-message">Checking what this browser can run.</p></div>
+      <div id="error-banner" class="error-banner" hidden><p id="error-message"></p><div class="button-row"><button id="retry">Restart Linux</button><button id="export-saved">Export last saved backup</button></div></div>
+      <section id="view-terminal" class="view active" aria-label="Linux terminal">
+        <div class="view-heading"><div><p class="eyebrow">LINUX CONSOLE</p><h1>Your machine, in a tab.</h1></div><span class="architecture">wasm32 / Linux 6.4</span></div>
+        <div class="terminal-panel"><div class="panel-toolbar"><span><span class="terminal-mark">&gt;_</span> root@browser-linux</span><div><button id="interrupt" title="Send Ctrl+C" disabled>Interrupt</button><button id="clear-terminal">Clear</button></div></div><div id="terminal"></div><div class="key-strip" aria-label="Terminal special keys"><button data-key="escape">Esc</button><button data-key="tab">Tab</button><button data-key="interrupt">Ctrl+C</button><button data-key="eof">Ctrl+D</button><button data-key="up">↑</button><button data-key="down">↓</button></div></div>
+        <div class="terminal-footer"><span>Commands run on this device.</span><button id="show-boot-log" class="text-button">Boot log</button></div>
+      </section>
+      <section id="view-files" class="view" aria-label="Linux files">
+        <div class="view-heading"><div><p class="eyebrow">LINUX FILESYSTEM</p><h1>Workspace</h1></div><button id="refresh-files" disabled>Refresh</button></div>
+        <div class="file-toolbar"><button id="up-folder" title="Parent folder" disabled>↑</button><form id="path-form"><input id="current-path" aria-label="Linux folder path" value="/home/web" spellcheck="false"></form><button id="new-file" disabled>New file</button><button id="new-folder" disabled>New folder</button><button id="import-file" disabled>Import</button></div>
+        <p id="folder-note" class="muted">Files here are shared with the Linux terminal.</p>
+        <div class="file-table"><div class="file-table-head"><span>NAME</span><span>TYPE</span><span>ACTIONS</span></div><div id="file-list"></div></div><input id="file-input" type="file" multiple hidden>
+      </section>
+      <section id="view-editor" class="view" aria-label="Text editor">
+        <div class="view-heading"><div><p class="eyebrow">TEXT EDITOR</p><h1 id="editor-title">Untitled</h1></div><div class="button-row"><button id="save-as" disabled>Save as…</button><button id="save-file" class="primary" disabled>Save file</button></div></div>
+        <div class="editor-meta"><code id="editor-path">Open a file from Files, or start writing.</code><span id="editor-state">New document</span></div>
+        <textarea id="editor" aria-label="File contents" spellcheck="false" placeholder="Write something. Save it into your Linux workspace."></textarea>
+        <div class="editor-footer"><span id="character-count">0 characters</span><span>Ctrl / ⌘ + S to save</span></div>
+      </section>
+      <section id="view-machine" class="view scroll-view" aria-label="Machine information">
+        <div class="view-heading"><div><p class="eyebrow">RUNNING LOCALLY</p><h1>Machine</h1></div><button id="restart">Restart Linux</button></div>
+        <div class="metrics"><article><span>Kernel</span><strong>Linux 6.4.16</strong><small>Compiled to WebAssembly</small></article><article><span>Guest memory</span><strong id="memory-used">—</strong><small id="memory-total">Waiting for Linux</small></article><article><span>Uptime</span><strong id="uptime">—</strong><small id="workers">Browser workers</small></article></div>
+        <div class="machine-grid"><article class="settings-card"><h2>Session</h2><label for="memory-choice">Memory limit for next boot</label><select id="memory-choice"><option value="128">128 MiB</option><option value="256" selected>256 MiB</option><option value="512">512 MiB</option></select><p class="muted">Browser overhead uses additional memory.</p><dl><dt>Boot time</dt><dd id="boot-time">—</dd><dt>Shared memory</dt><dd id="shared-memory">—</dd><dt>Browser processors</dt><dd id="host-cores">—</dd><dt>Workspace storage</dt><dd id="storage-size">—</dd></dl></article>
+        <article class="settings-card"><h2>Workspace & recovery</h2><p>Your <code>/home/web</code> files are saved in this browser every 10 seconds and when you save a file. Other Linux folders reset on reboot.</p><p>Export a backup to move your work or protect it from browser data removal. Running processes are not saved.</p><div class="button-row"><button id="import-backup">Restore backup…</button><button id="recover-previous">Previous save…</button><button id="machine-export" disabled>Export backup</button></div><input id="backup-input" type="file" accept="application/json,.json" hidden><p id="persist-state" class="muted"></p></article></div>
+        <article class="build-note"><h2>An early Linux/Wasm workstation</h2><p>The kernel and BusyBox commands run as WebAssembly on your device. Files and the editor use real Linux system calls through a dedicated guest process. The desktop interface is built for the browser.</p><p>This build has no Linux networking, conventional package repository, or accelerated Linux graphics yet. The upstream kernel port is experimental. It does not modify or replace your host operating system.</p><a href="https://github.com/joelseverin/linux-wasm" target="_blank" rel="noreferrer">Based on Joel Severin’s Linux/Wasm ↗</a></article>
+        <p class="muted"><a href="sources.html" target="_blank" rel="noopener">Source and licenses</a></p>
+      </section>
+    </main>
+  </div>
+  <div id="toast" role="status" hidden></div>
+  <dialog id="prompt-dialog"><form method="dialog"><h2 id="prompt-title"></h2><p id="prompt-description"></p><label id="prompt-label" for="prompt-input">Name</label><input id="prompt-input" autocomplete="off"><div class="dialog-actions"><button value="cancel">Cancel</button><button id="prompt-confirm" value="ok" class="primary">Continue</button></div></form></dialog>
+  <dialog id="log-dialog"><div class="panel-toolbar"><h2>Boot log</h2><button id="close-log">Close</button></div><pre id="boot-log"></pre></dialog>
+  <script src="assets/xterm.js"></script><script src="assets/addon-fit.js"></script><script src="runtime/linux.js"></script><script type="module" src="bootstrap.js"></script>
+</body></html>

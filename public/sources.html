@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Browser Linux — source and licenses</title><link rel="stylesheet" href="style.css"></head>
+<body style="height:auto;overflow:auto"><main style="max-width:780px;margin:0 auto;padding:40px 24px;line-height:1.7">
+<p><a href="./">← Back to Linux</a></p><h1>Source and licenses</h1>
+<p>Browser Linux is an experimental workstation built on Joel Severin’s Linux/Wasm port. The Linux kernel, musl and BusyBox run locally in your browser. The desktop and its filesystem bridge are open source.</p>
+<ul>
+<li><a href="https://github.com/nukacolafamine-star/browser-linux">Application source, build scripts and pinned patches</a></li>
+<li><a href="https://github.com/nukacolafamine-star/browser-linux/releases/download/v0.1.0/browser-linux-sources-0.1.0.tar">Download upstream source bundle</a> (includes Linux, BusyBox, musl, LLVM, patches, configurations and notices)</li>
+<li><a href="https://github.com/nukacolafamine-star/browser-linux/blob/main/docs/SOURCES.md">Source manifest and verification details</a></li>
+<li><a href="licenses/GPL-2.0.txt">GNU General Public License, version 2</a></li>
+<li><a href="licenses/xterm.txt">xterm.js license</a> and <a href="licenses/xterm-addon-fit.txt">fit addon license</a></li>
+</ul>
+<p>New application code and the upstream runtime are GPL-2.0-only. Each upstream component keeps its own license. The bundle contains the source releases and patches used by the archived build recipe; the kernel build was not reproduced byte-for-byte here. The patch chain’s final kernel revision matches the running binary’s version identifier.</p>
+<p>The kernel port remains experimental, with known intermittent boot and file-integrity failures. See the repository for limitations, recovery checks and test results.</p>
+</main></body></html>

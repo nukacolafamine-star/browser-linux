@@ -1,0 +1,60 @@
+{
+  "browser": "154.0.8037.57",
+  "assetVersion": "2f586de092c33eef",
+  "checks": [
+    {
+      "name": "real Linux kernel boot",
+      "detail": {
+        "bootMs": 1068.5649999976158,
+        "memoryBytes": 268435456
+      },
+      "passed": true
+    },
+    {
+      "name": "terminal writes visible through kernel filesystem bridge",
+      "passed": true
+    },
+    {
+      "name": "graphical editor and terminal share real files",
+      "passed": true
+    },
+    {
+      "name": "chunked binary transfer",
+      "detail": "150000 bytes",
+      "passed": true
+    },
+    {
+      "name": "workspace writes reject symlink escape",
+      "passed": true
+    },
+    {
+      "name": "filenames render as text",
+      "passed": true
+    },
+    {
+      "name": "workspace survives a fresh kernel boot",
+      "passed": true
+    },
+    {
+      "name": "second tab cannot overwrite active workspace",
+      "passed": true
+    },
+    {
+      "name": "portable backup contains exact binary file data",
+      "passed": true
+    },
+    {
+      "name": "offline reload boots kernel and restores saved files",
+      "passed": true
+    },
+    {
+      "name": "390px mobile layout has no page overflow",
+      "passed": true
+    },
+    {
+      "name": "no uncaught browser errors",
+      "passed": true
+    }
+  ],
+  "errors": []
+}
