@@ -1,0 +1,18 @@
+diff --git a/util/qemu-sockets.c b/util/qemu-sockets.c
+index 83e84b1..0616306 100644
+--- a/util/qemu-sockets.c
++++ b/util/qemu-sockets.c
+@@ -32,6 +32,13 @@
+ #include "qemu/cutils.h"
+ #include "trace.h"
+ 
++#ifdef __EMSCRIPTEN__
++/*
++ * Emscripten's getaddrinfo() fails every lookup that sets AI_ADDRCONFIG
++ * (unimplemented). Its emulated sockets have no interfaces to consult anyway.
++ */
++#undef AI_ADDRCONFIG
++#endif
+ #ifndef AI_ADDRCONFIG
+ # define AI_ADDRCONFIG 0
+ #endif
