@@ -30,7 +30,8 @@ runuser -u "$user" -- env -i HOME="/home/$user" USER="$user" LOGNAME="$user" SHE
   PATH=/usr/local/bin:/usr/bin:/bin XDG_RUNTIME_DIR="$runtime" BROWSER_RENDERER="$renderer" \
   /usr/local/bin/browser-session > /var/log/browser-session.log 2>&1 &
 
-wait_for 240 test -S "$runtime/wayland-0" || fail 'Weston did not create its socket; see /var/log/browser-session.log'
+weston_running() { test -S "$runtime/wayland-0" && pgrep -u "$user" -x weston > /dev/null; }
+wait_for 240 weston_running || fail "Weston is not running; see /home/$user/.local/state/weston.log"
 console "BROWSER_LINUX_WAYLAND_READY compositor_pid=$(pgrep -u "$user" -x weston | head -n1) socket=$runtime/wayland-0 renderer=$renderer"
 if wait_for 60 test -S /tmp/.X11-unix/X0; then console 'BROWSER_LINUX_XWAYLAND_READY display=:0'; fi
 if wait_for 120 pgrep -u "$user" -x foot > /dev/null; then

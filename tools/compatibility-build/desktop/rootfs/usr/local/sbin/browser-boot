@@ -14,6 +14,9 @@ mountpoint -q /run || mount -t tmpfs -o mode=755,nosuid,nodev tmpfs /run
 mountpoint -q /tmp || mount -t tmpfs -o mode=1777,nosuid,nodev tmpfs /tmp
 mount -o remount,rw / 2>/dev/null || true
 mkdir -p /run/lock /run/user /run/browser-linux /var/log
+# Normally created by systemd-tmpfiles. Xwayland's X socket lives here.
+mkdir -p /tmp/.X11-unix /tmp/.ICE-unix
+chmod 1777 /tmp/.X11-unix /tmp/.ICE-unix
 ln -sf /proc/self/mounts /etc/mtab 2>/dev/null || true
 
 hostname browser-linux
