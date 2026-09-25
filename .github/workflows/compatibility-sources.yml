@@ -7,6 +7,10 @@ on:
         description: Collect runtime sources as well as guest sources
         type: boolean
         default: true
+      guest:
+        description: Collect guest sources as well as runtime sources
+        type: boolean
+        default: true
       runtime_run:
         description: Successful runtime artifact run ID
         required: true
@@ -15,9 +19,6 @@ on:
         description: Matching guest artifact run ID with installed APK metadata
         required: true
         default: '36157834294'
-  push:
-    branches: [feature/portable-compatibility]
-    paths: ['.github/workflows/compatibility-sources.yml']
 permissions:
   contents: read
   actions: read
@@ -64,6 +65,7 @@ jobs:
           path: runtime-sources
           retention-days: 30
   guest:
+    if: inputs.guest
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
