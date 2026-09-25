@@ -84,7 +84,8 @@ library_sources = {
     'libresolv.a': 'resolver-stub', 'libglib-2.0.a': 'glib',
     'libgmodule-2.0.a': 'glib', 'libgobject-2.0.a': 'glib',
     'libgthread-2.0.a': 'glib', 'libgio-2.0.a': 'glib',
-    'libpcre2-8.a': 'glib', 'libpcre2-posix.a': 'glib',
+    'libpcre2-8.a': 'glib', 'libpcre2-16.a': 'glib', 'libpcre2-32.a': 'glib',
+    'libpcre2-posix.a': 'glib',
 }
 for library in sorted(Path('/glib-emscripten').rglob('*.a')):
     if library.name not in library_sources:

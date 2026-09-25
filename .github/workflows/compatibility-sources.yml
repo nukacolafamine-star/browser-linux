@@ -3,6 +3,10 @@ name: Collect compatibility source packages
 on:
   workflow_dispatch:
     inputs:
+      runtime:
+        description: Collect runtime sources as well as guest sources
+        type: boolean
+        default: true
       runtime_run:
         description: Successful runtime artifact run ID
         required: true
@@ -19,6 +23,7 @@ permissions:
   actions: read
 jobs:
   runtime:
+    if: github.event_name != 'workflow_dispatch' || inputs.runtime
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
@@ -51,7 +56,7 @@ jobs:
         run: |
           python3 tools/compatibility-build/verify-source-runtime.py expected-runtime runtime-sources
           git archive --format=tar.gz HEAD > runtime-sources/browser-linux-project.tar.gz
-          sha256sum runtime-sources/browser-linux-project.tar.gz >> runtime-sources/SHA256SUMS
+          (cd runtime-sources && sha256sum browser-linux-project.tar.gz >> SHA256SUMS)
       - uses: actions/upload-artifact@v4
         if: always()
         with:

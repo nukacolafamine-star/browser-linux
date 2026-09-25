@@ -81,13 +81,21 @@ def collect(installed, versions, output):
         env = dict(os.environ, REPODEST=str(directory), SRCDEST='/source-cache', CARCH='x86_64')
         # verify is explicit: srcpkg itself calls fetch but does not verify.
         run('abuild', '-F', 'fetch', 'verify', 'srcpkg', cwd=working, env=env)
-        source_archive = directory / 'src' / f'{origin}-{version}.src.tar.gz'
+        # abuild srcpkg uses "$pkgname-$pkgver-$pkgrel", while APK versions
+        # include the literal -r before pkgrel.
+        source_version = re.sub(r'-r([0-9]+)$', r'-\1', version)
+        source_archive = directory / 'src' / f'{origin}-{source_version}.src.tar.gz'
         if not source_archive.is_file():
             raise RuntimeError(f'APKBUILD version does not match installed metadata: {source_archive}')
+        if source_archive.stat().st_size >= 1_900_000_000:
+            raise RuntimeError(f'Source archive exceeds release asset size limit: {source_archive}')
         origins.append({'origin': origin, 'version': version, 'aportsCommit': commit,
                         'aportsPath': package_path, 'packages': names,
                         'archive': str(source_archive.relative_to(output)),
                         'sha256': hashlib.file_digest(source_archive.open('rb'), 'sha256').hexdigest()})
+        # Keep the original recipe tar and verified srcpkg, not duplicate copies
+        # of upstream archives or temporary symlinks into the download cache.
+        shutil.rmtree(directory / 'recipe')
     result = {'schema': 1, 'packages': packages, 'origins': origins,
               'collectorAbuildVersion': run('abuild', '-V'), 'reviewRequired': True,
               'note': 'Fetched upstream source and patches at installed package commits; not a claim of independently reproduced Alpine binary bytes.'}
