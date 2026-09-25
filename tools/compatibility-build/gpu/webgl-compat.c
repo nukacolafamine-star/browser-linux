@@ -152,11 +152,19 @@ static bool *capability(struct vstate *s, GLenum cap)
     default: return NULL;
     }
 }
+/* The capabilities WebGL 2 can switch. Primitive restart with the fixed
+ * index is always on in WebGL 2; desktop-only capabilities do not exist. */
 static const GLenum capabilities[] = {
     GL_BLEND, GL_CULL_FACE, GL_DEPTH_TEST, GL_DITHER, GL_POLYGON_OFFSET_FILL,
-    GL_PRIMITIVE_RESTART_FIXED_INDEX, GL_RASTERIZER_DISCARD, GL_SAMPLE_ALPHA_TO_COVERAGE,
+    GL_RASTERIZER_DISCARD, GL_SAMPLE_ALPHA_TO_COVERAGE,
     GL_SAMPLE_COVERAGE, GL_SCISSOR_TEST, GL_STENCIL_TEST,
 };
+static bool webgl_capability(GLenum cap)
+{
+    for (size_t i = 0; i < sizeof(capabilities) / sizeof(capabilities[0]); i++)
+        if (capabilities[i] == cap) return true;
+    return false;
+}
 
 static GLuint *buffer_binding(struct vstate *s, GLenum target)
 {
@@ -194,10 +202,252 @@ static const GLenum pixel_stores[] = {
 };
 
 /* ---------------------------------------------------------------------- */
+/* Buffers                                                                  */
+/*
+ * WebGL fixes a buffer's type at its first binding: element (index) buffers
+ * and all other buffers cannot share a buffer object or be copied into each
+ * other on the GPU. virglrenderer binds one guest buffer for both (Mesa
+ * uploads vertices and indices into the same buffer). Every buffer is
+ * therefore created as a non-element buffer; binding one as the element
+ * array binds an element-typed twin instead, which is refreshed from a CPU
+ * copy of the buffer's contents before indexed draws.
+ */
+struct buffer {
+    GLuint twin;                    /* element-array twin, 0 until needed */
+    uint8_t *shadow;                /* CPU copy, kept once a twin exists */
+    GLsizeiptr size;
+    GLsizeiptr dirty_lo, dirty_hi;  /* the twin is stale in [dirty_lo, dirty_hi) */
+    bool gpu_written;               /* the stale range of the shadow came from the GPU */
+    bool twin_sized;                /* the twin has storage of the current size */
+};
+static struct buffer *buffers;
+static GLuint buffers_len;
+static GLuint *vao_elements;        /* element buffer (its real name) per vertex array */
+static GLuint vao_elements_len;
+
+static void *grow(void *array, GLuint *len, GLuint index, size_t item)
+{
+    if (index < *len) return array;
+    GLuint wanted = index * 2 + 64;
+    char *grown = realloc(array, wanted * item);
+    if (!grown) return NULL;
+    memset(grown + *len * item, 0, (wanted - *len) * item);
+    *len = wanted;
+    return grown;
+}
+static struct buffer *buffer_info(GLuint name)
+{
+    if (!name) return NULL;
+    struct buffer *grown = grow(buffers, &buffers_len, name, sizeof(*buffers));
+    if (!grown) return NULL;
+    buffers = grown;
+    return &buffers[name];
+}
+static GLuint *vao_element(GLuint vao)
+{
+    GLuint *grown = grow(vao_elements, &vao_elements_len, vao, sizeof(*vao_elements));
+    if (!grown) return NULL;
+    vao_elements = grown;
+    return &vao_elements[vao];
+}
+
+/* The buffer (by its own name, never a twin's) bound to a target. */
+static GLuint target_buffer(GLenum target)
+{
+    struct vstate *s = cur();
+    if (target == GL_ELEMENT_ARRAY_BUFFER) {
+        GLuint *element = vao_element(s->vertex_array);
+        return element ? *element : 0;
+    }
+    GLuint *binding = buffer_binding(s, target);
+    return binding ? *binding : 0;
+}
+
+/* Reads and writes a buffer through a copy binding, then restores it. */
+static void read_buffer(GLuint name, GLintptr offset, GLsizeiptr size, void *out)
+{
+    struct buffer *b = buffer_info(name);
+    if (b && b->shadow && !(b->gpu_written && offset < b->dirty_hi && offset + size > b->dirty_lo) &&
+        offset >= 0 && offset + size <= b->size) {
+        memcpy(out, b->shadow + offset, (size_t)size);
+        return;
+    }
+    glBindBuffer(GL_COPY_READ_BUFFER, name);
+    glGetBufferSubData(GL_COPY_READ_BUFFER, offset, size, out);
+    glBindBuffer(GL_COPY_READ_BUFFER, cur()->copy_read_buffer);
+}
+
+/* Keeps the shadow of a buffer that has a twin up to date. NULL data: the
+ * range was written on the GPU and is read back when it is next needed. */
+static void buffer_written(GLuint name, GLintptr offset, GLsizeiptr size, const void *data)
+{
+    struct buffer *b = buffer_info(name);
+    if (!b || !b->shadow || size <= 0 || offset < 0 || offset + size > b->size) return;
+    if (data) memcpy(b->shadow + offset, data, (size_t)size);
+    else b->gpu_written = true;
+    if (b->dirty_hi <= b->dirty_lo) { b->dirty_lo = offset; b->dirty_hi = offset + size; }
+    else {
+        if (offset < b->dirty_lo) b->dirty_lo = offset;
+        if (offset + size > b->dirty_hi) b->dirty_hi = offset + size;
+    }
+}
+
+static void write_buffer(GLuint name, GLintptr offset, GLsizeiptr size, const void *data)
+{
+    glBindBuffer(GL_COPY_WRITE_BUFFER, name);
+    glBufferSubData(GL_COPY_WRITE_BUFFER, offset, size, data);
+    glBindBuffer(GL_COPY_WRITE_BUFFER, cur()->copy_write_buffer);
+    buffer_written(name, offset, size, data);
+}
+
+static GLuint element_twin(GLuint name)
+{
+    struct buffer *b = buffer_info(name);
+    if (!b) return name;
+    if (!b->twin) {
+        uint8_t *shadow = malloc(b->size > 0 ? (size_t)b->size : 1);
+        if (!shadow) return name;
+        if (b->size > 0) read_buffer(name, 0, b->size, shadow);
+        glGenBuffers(1, &b->twin);
+        b->shadow = shadow;
+        b->twin_sized = false;
+        b->gpu_written = false;
+        b->dirty_lo = 0; b->dirty_hi = b->size;
+    }
+    return b->twin;
+}
+
+/* Brings the bound element-array twin up to date before an indexed draw. */
+static void refresh_element_twin(void)
+{
+    GLuint name = target_buffer(GL_ELEMENT_ARRAY_BUFFER);
+    struct buffer *b = buffer_info(name);
+    if (!b || !b->twin) return;
+    if (b->gpu_written && b->dirty_hi > b->dirty_lo) {
+        glBindBuffer(GL_COPY_READ_BUFFER, name);
+        glGetBufferSubData(GL_COPY_READ_BUFFER, b->dirty_lo, b->dirty_hi - b->dirty_lo, b->shadow + b->dirty_lo);
+        glBindBuffer(GL_COPY_READ_BUFFER, cur()->copy_read_buffer);
+    }
+    b->gpu_written = false;
+    if (!b->twin_sized) {
+        glBufferData(GL_ELEMENT_ARRAY_BUFFER, b->size, b->shadow, GL_DYNAMIC_DRAW);
+        b->twin_sized = true;
+    } else if (b->dirty_hi > b->dirty_lo) {
+        glBufferSubData(GL_ELEMENT_ARRAY_BUFFER, b->dirty_lo, b->dirty_hi - b->dirty_lo, b->shadow + b->dirty_lo);
+    }
+    b->dirty_lo = b->dirty_hi = 0;
+}
+
+static void vc_GenBuffers(GLsizei n, GLuint *names)
+{
+    glGenBuffers(n, names);
+    /* The first binding makes each a non-element buffer (see above). */
+    for (GLsizei i = 0; i < n; i++) {
+        glBindBuffer(GL_COPY_WRITE_BUFFER, names[i]);
+        struct buffer *b = buffer_info(names[i]);
+        if (b) memset(b, 0, sizeof(*b));
+    }
+    glBindBuffer(GL_COPY_WRITE_BUFFER, cur()->copy_write_buffer);
+}
+
+static void vc_BufferData(GLenum target, GLsizeiptr size, const void *data, GLenum usage)
+{
+    GLuint name = target_buffer(target);
+    if (target == GL_ELEMENT_ARRAY_BUFFER) {
+        glBindBuffer(GL_COPY_WRITE_BUFFER, name);
+        glBufferData(GL_COPY_WRITE_BUFFER, size, data, usage);
+        glBindBuffer(GL_COPY_WRITE_BUFFER, cur()->copy_write_buffer);
+    } else {
+        glBufferData(target, size, data, usage);
+    }
+    struct buffer *b = buffer_info(name);
+    if (!b || size < 0) return;
+    b->size = size;
+    if (b->shadow) {
+        uint8_t *shadow = realloc(b->shadow, size > 0 ? (size_t)size : 1);
+        if (!shadow) return;
+        b->shadow = shadow;
+        if (data) memcpy(shadow, data, (size_t)size); else memset(shadow, 0, (size_t)size);
+        b->twin_sized = false;
+        b->gpu_written = false;
+        b->dirty_lo = 0; b->dirty_hi = size;
+    }
+}
+
+static void vc_BufferSubData(GLenum target, GLintptr offset, GLsizeiptr size, const void *data)
+{
+    if (target == GL_ELEMENT_ARRAY_BUFFER) {
+        write_buffer(target_buffer(target), offset, size, data);
+        return;
+    }
+    glBufferSubData(target, offset, size, data);
+    buffer_written(target_buffer(target), offset, size, data);
+}
+
+static void vc_CopyBufferSubData(GLenum read_target, GLenum write_target, GLintptr read_offset,
+                                 GLintptr write_offset, GLsizeiptr size)
+{
+    GLuint source = target_buffer(read_target), destination = target_buffer(write_target);
+    glBindBuffer(GL_COPY_READ_BUFFER, source);
+    glBindBuffer(GL_COPY_WRITE_BUFFER, destination);
+    glCopyBufferSubData(GL_COPY_READ_BUFFER, GL_COPY_WRITE_BUFFER, read_offset, write_offset, size);
+    glBindBuffer(GL_COPY_READ_BUFFER, cur()->copy_read_buffer);
+    glBindBuffer(GL_COPY_WRITE_BUFFER, cur()->copy_write_buffer);
+    /* Grow the table once, so that neither pointer is moved by the other lookup. */
+    buffer_info(source > destination ? source : destination);
+    struct buffer *d = buffer_info(destination), *s = buffer_info(source);
+    if (d && d->shadow) {
+        if (s && s->shadow && !s->gpu_written && read_offset >= 0 && read_offset + size <= s->size)
+            buffer_written(destination, write_offset, size, s->shadow + read_offset);
+        else
+            buffer_written(destination, write_offset, size, NULL);
+    }
+}
+
+static void vc_GetBufferSubData(GLenum target, GLintptr offset, GLsizeiptr size, void *data)
+{
+    read_buffer(target_buffer(target), offset, size, data);
+}
+
+static void forget_buffer(GLuint name)
+{
+    struct buffer *b = buffer_info(name);
+    if (!b) return;
+    if (b->twin) glDeleteBuffers(1, &b->twin);
+    free(b->shadow);
+    memset(b, 0, sizeof(*b));
+    for (GLuint i = 0; i < vao_elements_len; i++) if (vao_elements[i] == name) vao_elements[i] = 0;
+}
+
+static void vc_DrawElements(GLenum mode, GLsizei count, GLenum type, const void *indices)
+{ refresh_element_twin(); glDrawElements(mode, count, type, indices); }
+static void vc_DrawElementsInstanced(GLenum mode, GLsizei count, GLenum type, const void *indices, GLsizei instances)
+{ refresh_element_twin(); glDrawElementsInstanced(mode, count, type, indices, instances); }
+static void vc_DrawRangeElements(GLenum mode, GLuint start, GLuint end, GLsizei count, GLenum type, const void *indices)
+{ refresh_element_twin(); glDrawRangeElements(mode, start, end, count, type, indices); }
+
+/* The GPU writes these buffers; their shadows are refreshed when needed. */
+static void vc_EndTransformFeedback(void)
+{
+    glEndTransformFeedback();
+    struct vstate *s = cur();
+    for (int i = 0; i < MAX_TFB; i++) {
+        struct buffer *b = buffer_info(s->tfb[i].buffer);
+        if (b && b->shadow) buffer_written(s->tfb[i].buffer, 0, b->size, NULL);
+    }
+}
+static void vc_ReadPixels(GLint x, GLint y, GLsizei width, GLsizei height, GLenum format, GLenum type, void *pixels)
+{
+    glReadPixels(x, y, width, height, format, type, pixels);
+    struct buffer *b = buffer_info(cur()->pixel_pack_buffer);
+    if (b && b->shadow) buffer_written(cur()->pixel_pack_buffer, 0, b->size, NULL);
+}
+
+/* ---------------------------------------------------------------------- */
 /* State-tracking wrappers                                                 */
 
-static void vc_Enable(GLenum cap) { bool *v = capability(cur(), cap); if (v) *v = true; glEnable(cap); }
-static void vc_Disable(GLenum cap) { bool *v = capability(cur(), cap); if (v) *v = false; glDisable(cap); }
+static void vc_Enable(GLenum cap) { bool *v = capability(cur(), cap); if (v) *v = true; if (webgl_capability(cap)) glEnable(cap); }
+static void vc_Disable(GLenum cap) { bool *v = capability(cur(), cap); if (v) *v = false; if (webgl_capability(cap)) glDisable(cap); }
 static void vc_BlendColor(GLfloat r, GLfloat g, GLfloat b, GLfloat a)
 { struct vstate *s = cur(); s->blend_color[0] = r; s->blend_color[1] = g; s->blend_color[2] = b; s->blend_color[3] = a; glBlendColor(r, g, b, a); }
 static void vc_BlendEquation(GLenum mode) { struct vstate *s = cur(); s->blend_eq_rgb = s->blend_eq_alpha = mode; glBlendEquation(mode); }
@@ -260,7 +510,14 @@ static void vc_Hint(GLenum target, GLenum mode)
 
 static void vc_BindBuffer(GLenum target, GLuint buffer)
 {
-    GLuint *binding = buffer_binding(cur(), target);
+    struct vstate *s = cur();
+    if (target == GL_ELEMENT_ARRAY_BUFFER) {
+        GLuint *element = vao_element(s->vertex_array);
+        if (element) *element = buffer;
+        glBindBuffer(target, buffer ? element_twin(buffer) : 0);
+        return;
+    }
+    GLuint *binding = buffer_binding(s, target);
     if (binding) *binding = buffer;
     glBindBuffer(target, buffer);
 }
@@ -358,6 +615,7 @@ static void vc_DeleteBuffers(GLsizei n, const GLuint *names)
     forget(&s->uniform_buffer, names, n); forget(&s->transform_feedback_buffer, names, n);
     for (int i = 0; i < MAX_UBO; i++) forget(&s->ubo[i].buffer, names, n);
     for (int i = 0; i < MAX_TFB; i++) forget(&s->tfb[i].buffer, names, n);
+    for (GLsizei i = 0; i < n; i++) forget_buffer(names[i]);
     glDeleteBuffers(n, names);
 }
 static void vc_DeleteTextures(GLsizei n, const GLuint *names)
@@ -379,7 +637,12 @@ static void vc_DeleteFramebuffers(GLsizei n, const GLuint *names)
     glDeleteFramebuffers(n, names);
 }
 static void vc_DeleteRenderbuffers(GLsizei n, const GLuint *names) { forget(&cur()->renderbuffer, names, n); glDeleteRenderbuffers(n, names); }
-static void vc_DeleteVertexArrays(GLsizei n, const GLuint *names) { forget(&cur()->vertex_array, names, n); glDeleteVertexArrays(n, names); }
+static void vc_DeleteVertexArrays(GLsizei n, const GLuint *names)
+{
+    forget(&cur()->vertex_array, names, n);
+    for (GLsizei i = 0; i < n; i++) if (names[i] < vao_elements_len) vao_elements[names[i]] = 0;
+    glDeleteVertexArrays(n, names);
+}
 static void vc_DeleteTransformFeedbacks(GLsizei n, const GLuint *names) { forget(&cur()->transform_feedback, names, n); glDeleteTransformFeedbacks(n, names); }
 static void vc_DeleteProgram(GLuint program) { if (cur()->program == program) { /* stays in use until replaced, as in GL */ } glDeleteProgram(program); }
 
@@ -396,27 +659,6 @@ struct mapping {
 };
 static struct mapping *mappings;
 
-static GLenum binding_query(GLenum target)
-{
-    switch (target) {
-    case GL_ARRAY_BUFFER: return GL_ARRAY_BUFFER_BINDING;
-    case GL_ELEMENT_ARRAY_BUFFER: return GL_ELEMENT_ARRAY_BUFFER_BINDING;
-    case GL_COPY_READ_BUFFER: return GL_COPY_READ_BUFFER_BINDING;
-    case GL_COPY_WRITE_BUFFER: return GL_COPY_WRITE_BUFFER_BINDING;
-    case GL_PIXEL_PACK_BUFFER: return GL_PIXEL_PACK_BUFFER_BINDING;
-    case GL_PIXEL_UNPACK_BUFFER: return GL_PIXEL_UNPACK_BUFFER_BINDING;
-    case GL_UNIFORM_BUFFER: return GL_UNIFORM_BUFFER_BINDING;
-    case GL_TRANSFORM_FEEDBACK_BUFFER: return GL_TRANSFORM_FEEDBACK_BUFFER_BINDING;
-    default: return 0;
-    }
-}
-static GLuint bound_buffer(GLenum target)
-{
-    GLint buffer = 0;
-    GLenum query = binding_query(target);
-    if (query) glGetIntegerv(query, &buffer);
-    return (GLuint)buffer;
-}
 static struct mapping **find_mapping(GLuint buffer)
 {
     struct mapping **m = &mappings;
@@ -425,31 +667,32 @@ static struct mapping **find_mapping(GLuint buffer)
 }
 static void *vc_MapBufferRange(GLenum target, GLintptr offset, GLsizeiptr length, GLbitfield access)
 {
-    GLuint buffer = bound_buffer(target);
+    GLuint buffer = target_buffer(target);
     if (!buffer || length <= 0 || *find_mapping(buffer)) return NULL;
     struct mapping *m = calloc(1, sizeof(*m));
+    if (!m) return NULL;
     m->data = malloc((size_t)length);
     if (!m->data) { free(m); return NULL; }
     m->buffer = buffer; m->offset = offset; m->length = length; m->access = access;
     if ((access & GL_MAP_READ_BIT) || !(access & (GL_MAP_INVALIDATE_RANGE_BIT | GL_MAP_INVALIDATE_BUFFER_BIT))) {
         /* Partial writes must keep the bytes they do not overwrite. */
-        glGetBufferSubData(target, offset, length, m->data);
+        read_buffer(buffer, offset, length, m->data);
     }
     m->next = mappings; mappings = m;
     return m->data;
 }
 static void vc_FlushMappedBufferRange(GLenum target, GLintptr offset, GLsizeiptr length)
 {
-    struct mapping *m = *find_mapping(bound_buffer(target));
+    struct mapping *m = *find_mapping(target_buffer(target));
     if (m && (m->access & GL_MAP_WRITE_BIT) && offset >= 0 && offset + length <= m->length)
-        glBufferSubData(target, m->offset + offset, length, (const char *)m->data + offset);
+        write_buffer(m->buffer, m->offset + offset, length, (const char *)m->data + offset);
 }
 static GLboolean vc_UnmapBuffer(GLenum target)
 {
-    struct mapping **slot = find_mapping(bound_buffer(target)), *m = *slot;
+    struct mapping **slot = find_mapping(target_buffer(target)), *m = *slot;
     if (!m) return GL_FALSE;
     if ((m->access & GL_MAP_WRITE_BIT) && !(m->access & GL_MAP_FLUSH_EXPLICIT_BIT))
-        glBufferSubData(target, m->offset, m->length, m->data);
+        write_buffer(m->buffer, m->offset, m->length, m->data);
     *slot = m->next;
     free(m->data); free(m);
     return GL_TRUE;
@@ -592,6 +835,42 @@ static GLenum vc_GetError(void)
     GLenum error = pending_error[current_id];
     if (error) { pending_error[current_id] = GL_NO_ERROR; return error; }
     return glGetError();
+}
+
+/* Immutable texture storage needs a sized format; WebGL 2 has no
+ * luminance, alpha or BGRA ones. */
+static GLenum sized_format(GLenum internal)
+{
+    switch (internal) {
+    case GL_RGBA: case BGRA_EXT: case BGRA8_EXT: return GL_RGBA8;
+    case GL_RGB: return GL_RGB8;
+    case GL_LUMINANCE_ALPHA: case 0x8045 /* GL_LUMINANCE8_ALPHA8 */: return GL_RG8;
+    case GL_LUMINANCE: case GL_ALPHA: case 0x8040 /* GL_LUMINANCE8 */: case 0x803C /* GL_ALPHA8 */: return GL_R8;
+    default: return internal;
+    }
+}
+/* Names texture formats WebGL rejects, once each; the error stays with the
+ * calling context. */
+static void report_format(const char *call, GLenum internal)
+{
+    GLenum error = glGetError();
+    if (error == GL_NO_ERROR) return;
+    if (!pending_error[current_id]) pending_error[current_id] = error;
+    char what[64];
+    snprintf(what, sizeof(what), "%s with format 0x%x", call, internal);
+    warn_once(what);
+}
+static void vc_TexStorage2D(GLenum target, GLsizei levels, GLenum internal, GLsizei width, GLsizei height)
+{
+    collect_errors(current_id);
+    glTexStorage2D(target, levels, sized_format(internal), width, height);
+    report_format("glTexStorage2D", internal);
+}
+static void vc_TexStorage3D(GLenum target, GLsizei levels, GLenum internal, GLsizei width, GLsizei height, GLsizei depth)
+{
+    collect_errors(current_id);
+    glTexStorage3D(target, levels, sized_format(internal), width, height, depth);
+    report_format("glTexStorage3D", internal);
 }
 
 /* ---------------------------------------------------------------------- */
@@ -755,9 +1034,14 @@ static const struct entry compat[] = {
     E("glClampColor", vc_ClampColor), E("glDebugMessageCallback", vc_DebugMessageCallback), E("glDebugMessageCallbackKHR", vc_DebugMessageCallback),
     E("glGetQueryObjectuiv", vc_GetQueryObjectuiv), E("glGetQueryObjectiv", vc_GetQueryObjectiv),
     E("glGetQueryObjectui64v", vc_GetQueryObjectui64v), E("glGetQueryObjecti64v", vc_GetQueryObjecti64v),
-    E("glGetBufferSubData", glGetBufferSubData),
+    E("glGetBufferSubData", vc_GetBufferSubData),
     E("glClientWaitSync", vc_ClientWaitSync), E("glWaitSync", vc_WaitSync), E("glGetError", vc_GetError),
     E("glTexImage2D", vc_TexImage2D), E("glTexSubImage2D", vc_TexSubImage2D),
+    E("glTexStorage2D", vc_TexStorage2D), E("glTexStorage3D", vc_TexStorage3D),
+    E("glGenBuffers", vc_GenBuffers), E("glBufferData", vc_BufferData), E("glBufferSubData", vc_BufferSubData),
+    E("glCopyBufferSubData", vc_CopyBufferSubData), E("glDrawElements", vc_DrawElements),
+    E("glDrawElementsInstanced", vc_DrawElementsInstanced), E("glDrawRangeElements", vc_DrawRangeElements),
+    E("glEndTransformFeedback", vc_EndTransformFeedback), E("glReadPixels", vc_ReadPixels),
     E("glTexParameteri", vc_TexParameteri), E("glTexParameteriv", vc_TexParameteriv),
     /* EGL, linked statically by Emscripten */
     E("eglBindAPI", eglBindAPI), E("eglChooseConfig", eglChooseConfig), E("eglCreateContext", eglCreateContext),
