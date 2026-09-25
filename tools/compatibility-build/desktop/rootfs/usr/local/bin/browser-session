@@ -4,6 +4,8 @@ set -eu
 export XDG_SESSION_TYPE=wayland XDG_CURRENT_DESKTOP=weston
 export LIBSEAT_BACKEND=seatd SEATD_SOCK=/run/seatd.sock
 export LANG=C.UTF-8 XCURSOR_SIZE=24
+# See /etc/profile.d/browser-linux.sh.
+export SSL_CERT_FILE=/etc/ssl/browser-linux-no-bundle.pem SSL_CERT_DIR=/etc/ssl/certs
 mkdir -p "$HOME/.local/state"
 exec dbus-run-session -- weston --backend=drm --renderer="${BROWSER_RENDERER:-pixman}" \
   --shell=desktop-shell.so --socket=wayland-0 --idle-time=0 --continue-without-input \

@@ -4,6 +4,9 @@
 # part of the Browser Linux image; each user downloads them from Mojang and
 # signs in with their own account inside the launcher.
 set -euo pipefail
+# Certificate authorities are looked up by hash (see /etc/profile.d/browser-linux.sh):
+# Mojang's servers drop TLS handshakes that take longer than about 5 seconds.
+export SSL_CERT_FILE=/etc/ssl/browser-linux-no-bundle.pem SSL_CERT_DIR=/etc/ssl/certs
 
 url=https://launcher.mojang.com/download/Minecraft.tar.gz
 # Linux launcher bootstrap published on 2026-09-25 (1,102,510 bytes), as pinned
@@ -22,7 +25,7 @@ if [ ! -x "$launcher" ]; then
   echo "Downloading the official launcher from $url ..."
   work=$(mktemp -d)
   trap 'rm -rf "$work"' EXIT
-  curl --fail --location --retry 3 --progress-bar -o "$work/Minecraft.tar.gz" "$url"
+  curl --fail --location --retry 3 --retry-all-errors --progress-bar -o "$work/Minecraft.tar.gz" "$url"
   actual=$(sha256sum "$work/Minecraft.tar.gz" | cut -d' ' -f1)
   if [ "$actual" = "$tested_sha256" ]; then
     echo "Verified: this is the launcher build Browser Linux was tested with."

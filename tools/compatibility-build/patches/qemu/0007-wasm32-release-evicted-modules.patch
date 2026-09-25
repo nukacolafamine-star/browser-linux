@@ -1,0 +1,48 @@
+diff --git a/tcg/wasm32.c b/tcg/wasm32.c
+index 97ed765..0f34456 100644
+--- a/tcg/wasm32.c
++++ b/tcg/wasm32.c
+@@ -104,7 +104,14 @@ struct instance_info {
+     int fidx;
+ };
+ 
+-#define MAX_INSTANCE_ALIVE 15000
++/*
++ * Modules released from the function table are counted as freed right away.
++ * Waiting for a FinalizationRegistry report stalled compilation for good: a
++ * busy worker rarely collects garbage, so once the cap was reached every
++ * translation block ran in the interpreter. The collector still reclaims the
++ * modules; allocating new ones creates the pressure that triggers it.
++ */
++#define MAX_INSTANCE_ALIVE 60000
+ #define INSTANCE_RUNNING_LEN MAX_INSTANCE_ALIVE
+ __thread struct instance_info instance_running[INSTANCE_RUNNING_LEN];
+ __thread int instance_running_begin = 0;
+@@ -132,16 +139,8 @@ static int instance_pending_gc_local()
+ 
+ static void check_instance_garbage_collected()
+ {
+-    if (instance_garbage_collected_local > 0) {
+-        if (instance_garbage_collected_local > instance_pending_gc_local()) {
+-            printf("unexpected number of removed instances %d > %d",
+-                   instance_garbage_collected_local, instance_pending_gc_local()); fflush(stdout);
+-            exit(1);
+-        }
+-        qatomic_sub(&instance_alive_global, instance_garbage_collected_local);
+-        instance_alive_local -= instance_garbage_collected_local;
+-        instance_garbage_collected_local = 0;
+-    }
++    /* Released modules were already counted (see MAX_INSTANCE_ALIVE). */
++    instance_garbage_collected_local = 0;
+ }
+ 
+ static void remove_instance_running_local()
+@@ -159,6 +158,8 @@ static void remove_instance_running_local()
+     if (to_remove_instance_idx > 0) {
+         remove_module_js();
+     }
++    instance_alive_local -= to_remove;
++    qatomic_sub(&instance_alive_global, to_remove);
+ }
+ 
+ static void add_instance_running_local(int fidx, void *tb_ptr)
