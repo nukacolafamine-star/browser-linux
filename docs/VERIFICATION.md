@@ -1,5 +1,11 @@
 # Verification record
 
+## Live GitHub Pages verification
+
+The deployed HTTPS site at https://nukacolafamine-star.github.io/browser-linux/ was tested in a fresh Chrome profile at a 390px touch viewport. The first visit reloaded once, enabled shared memory and booted the real kernel. A guest file was written and saved; an offline page reload booted Linux again and restored the exact contents. No uncaught browser errors were observed. See `verification/live-pages-report.json`.
+
+GitHub Pages returns 404 for `.nojekyll`, so host marker files are excluded from the offline cache. The Pages regression test now reproduces that behavior and passes eight checks. Physical iPhone Safari remains untested.
+
 Tests ran on the existing Windows host with Node 22.20.0 and locally installed Chrome 154.0.8037.57 / Edge 153.0.4234.48. Browser automation used fresh temporary profiles. No native Linux installation was used.
 
 ## Checks exercised

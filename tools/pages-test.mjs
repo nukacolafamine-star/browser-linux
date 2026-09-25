@@ -23,6 +23,8 @@ const server=http.createServer(async(request,response)=>{
     if(request.method!=='GET'&&request.method!=='HEAD'){response.writeHead(405).end();return;}
     if(!url.pathname.startsWith(prefix)){response.writeHead(404).end('Outside app prefix');return;}
     const relative=decodeURIComponent(url.pathname.slice(prefix.length))||'index.html';
+    // GitHub Pages uses .nojekyll as a build marker, but does not serve it.
+    if(relative.split(/[\\/]/).some(segment=>segment.startsWith('.'))){response.writeHead(404).end('Hidden files are not published');return;}
     const filename=await fs.realpath(path.resolve(publicRoot,relative));
     if(!filename.startsWith(publicRoot+path.sep)){response.writeHead(403).end();return;}
     const body=await fs.readFile(filename);
@@ -49,6 +51,17 @@ try{
   assert.equal(initialResponse.headers.get('cross-origin-opener-policy'),null);
   assert.equal(initialResponse.headers.get('cross-origin-embedder-policy'),null);
   record('test server provides no isolation headers');
+  assert.equal((await fetch(url+'.nojekyll')).status,404);
+  assert.equal((await fetch(url+'assets/.hidden/example.js')).status,404);
+  const manifest=JSON.parse(await fs.readFile(path.join(publicRoot,'asset-manifest.json'),'utf8'));
+  const serviceWorker=await fs.readFile(path.join(publicRoot,'sw.js'),'utf8');
+  const assetDeclaration=serviceWorker.match(/^const ASSETS=(\[.*\]);$/m);
+  assert.ok(assetDeclaration,'Generated service worker must declare its precache assets');
+  const precache=JSON.parse(assetDeclaration[1]);
+  const hiddenAsset=asset=>decodeURIComponent(new URL(asset,url).pathname).split('/').some(segment=>segment.startsWith('.'));
+  assert.deepEqual(Object.keys(manifest.assets).filter(hiddenAsset),[],'Build manifest includes a dotfile that GitHub Pages will not serve');
+  assert.deepEqual(precache.filter(hiddenAsset),[],'Offline precache includes a dotfile that would abort service-worker installation on GitHub Pages');
+  record('Pages-style hidden-file 404s cannot break app manifest or offline precache');
   browser=await chromium.launch({channel:'chrome',headless:true});report.browser=browser.version();
   context=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true,deviceScaleFactor:1});
   page=await context.newPage();

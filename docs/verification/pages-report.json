@@ -1,10 +1,14 @@
 {
-  "url": "http://127.0.0.1:63571/browser-linux/",
-  "startedAt": "2026-09-25T07:46:37.080Z",
-  "assetVersion": "2cb68854db9cc70a",
+  "url": "http://127.0.0.1:63930/browser-linux/",
+  "startedAt": "2026-09-25T07:58:20.376Z",
+  "assetVersion": "8c8bcc28d3299dd9",
   "checks": [
     {
       "name": "test server provides no isolation headers",
+      "passed": true
+    },
+    {
+      "name": "Pages-style hidden-file 404s cannot break app manifest or offline precache",
       "passed": true
     },
     {
@@ -13,8 +17,8 @@
       "detail": {
         "isolated": true,
         "shared": true,
-        "controller": "http://127.0.0.1:63571/browser-linux/sw.js",
-        "bootMs": 945.0850000083447,
+        "controller": "http://127.0.0.1:63930/browser-linux/sw.js",
+        "bootMs": 934.0949999988079,
         "memoryBytes": 134217728
       }
     },
@@ -61,16 +65,18 @@
   ],
   "errors": [],
   "navigations": [
-    "http://127.0.0.1:63571/browser-linux/",
-    "http://127.0.0.1:63571/browser-linux/",
-    "http://127.0.0.1:63571/browser-linux/",
-    "http://127.0.0.1:63571/browser-linux/"
+    "http://127.0.0.1:63930/browser-linux/",
+    "http://127.0.0.1:63930/browser-linux/",
+    "http://127.0.0.1:63930/browser-linux/",
+    "http://127.0.0.1:63930/browser-linux/"
   ],
   "browser": "154.0.8037.57",
   "passed": true,
-  "finishedAt": "2026-09-25T07:46:41.595Z",
+  "finishedAt": "2026-09-25T07:58:24.674Z",
   "serverRequests": [
     "/browser-linux/",
+    "/browser-linux/.nojekyll",
+    "/browser-linux/assets/.hidden/example.js",
     "/browser-linux/",
     "/browser-linux/assets/xterm.css",
     "/browser-linux/style.css",
@@ -81,11 +87,9 @@
     "/browser-linux/icon.svg",
     "/browser-linux/sw.js",
     "/browser-linux/",
-    "/browser-linux/.nojekyll",
     "/browser-linux/app.js",
     "/browser-linux/assets/addon-fit.js",
     "/browser-linux/assets/initramfs.cpio.gz",
-    "/browser-linux/icon.svg",
     "/browser-linux/assets/vmlinux.wasm",
     "/browser-linux/assets/xterm.css",
     "/browser-linux/assets/xterm.js",
@@ -93,11 +97,16 @@
     "/browser-linux/icon.svg",
     "/browser-linux/index.html",
     "/browser-linux/integrity.js",
+    "/browser-linux/licenses/GPL-2.0.txt",
+    "/browser-linux/licenses/xterm-addon-fit.txt",
+    "/browser-linux/licenses/xterm.txt",
     "/browser-linux/machine.js",
     "/browser-linux/manifest.webmanifest",
     "/browser-linux/runtime/browser-agent.js",
     "/browser-linux/runtime/linux-worker.js",
+    "/browser-linux/icon.svg",
     "/browser-linux/runtime/linux.js",
+    "/browser-linux/sources.html",
     "/browser-linux/storage.js",
     "/browser-linux/style.css",
     "/browser-linux/sw.js"

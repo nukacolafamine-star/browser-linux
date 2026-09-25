@@ -1,0 +1,19 @@
+{
+  "url": "https://nukacolafamine-star.github.io/browser-linux/",
+  "assetVersion": "4c9c5d29a3f2fa09",
+  "passed": true,
+  "checks": [
+    "HTTPS live site",
+    "shared memory after first-visit setup",
+    "real Linux boot",
+    "guest file saved",
+    "offline reboot restored exact file"
+  ],
+  "browser": "154.0.8037.57",
+  "navigations": [
+    "https://nukacolafamine-star.github.io/browser-linux/",
+    "https://nukacolafamine-star.github.io/browser-linux/",
+    "https://nukacolafamine-star.github.io/browser-linux/"
+  ],
+  "errors": []
+}
