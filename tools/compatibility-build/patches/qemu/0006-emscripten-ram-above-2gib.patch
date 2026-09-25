@@ -25,3 +25,40 @@ index 0c17398..4c98967 100644
      }
  
      if (machine->memdev) {
+diff --git a/util/mmap-alloc.c b/util/mmap-alloc.c
+index 8c8708c..f0688a8 100644
+--- a/util/mmap-alloc.c
++++ b/util/mmap-alloc.c
+@@ -252,6 +252,19 @@ void *qemu_ram_mmap(int fd,
+ {
+ #if defined(EMSCRIPTEN)
+     void *ptr;
++    if (fd == -1) {
++        /*
++         * musl's mmap() refuses lengths of 2 GiB or more on 32-bit targets,
++         * and Emscripten serves anonymous mappings from the heap anyway.
++         */
++        ptr = qemu_try_memalign(align, size);
++        if (!ptr) {
++            errno = ENOMEM;
++            return MAP_FAILED;
++        }
++        memset(ptr, 0, size);
++        return ptr;
++    }
+     ptr = mmap_activate(0, size + align, fd, qemu_map_flags, map_offset);
+     return (void *)QEMU_ALIGN_UP((uintptr_t)ptr, align);
+ #else
+@@ -302,6 +315,12 @@ void *qemu_ram_mmap(int fd,
+ 
+ void qemu_ram_munmap(int fd, void *ptr, size_t size)
+ {
++#if defined(EMSCRIPTEN)
++    if (ptr && fd == -1) {
++        qemu_vfree(ptr);
++        return;
++    }
++#endif
+     if (ptr) {
+         /* Unmap both the RAM block and the guard page */
+         munmap(ptr, size + mmap_guard_pagesize(fd));

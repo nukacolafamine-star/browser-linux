@@ -304,15 +304,19 @@ async function boot() {
 }
 
 // Development diagnostics: log the stack of an exception that stops an
-// emulator thread; otherwise only its message reaches the page.
+// emulator thread (otherwise only its message reaches the page), and why
+// WebAssembly memory could not grow.
 function withCrashStacks(bytes) {
   let text = new TextDecoder().decode(bytes);
-  const patch = (old, added) => {
+  const patch = (old, replacement) => {
     if (text.split(old).length !== 2) throw new Error('Unexpected emulator script; cannot add diagnostics');
-    text = text.replace(old, added + old);
+    text = text.replace(old, replacement);
   };
-  patch('  quit_(1, e);\n};', "  err('Emulator thread stopped: ' + (e?.stack || e));\n");
-  patch('      __emscripten_thread_crashed();\n      throw ex;', "      err('Emulator thread crashed: ' + (ex?.stack || ex));\n");
+  patch('  quit_(1, e);\n};', "  err('Emulator thread stopped: ' + (e?.stack || e));\n  quit_(1, e);\n};");
+  patch('      __emscripten_thread_crashed();\n      throw ex;', "      err('Emulator thread crashed: ' + (ex?.stack || ex));\n      __emscripten_thread_crashed();\n      throw ex;");
+  patch('  } catch (e) {}\n};', "  } catch (e) { err('WebAssembly memory could not grow to ' + size + ' bytes: ' + e); }\n};");
+  patch('    updateMemoryViews();\n    return 1;', "    updateMemoryViews();\n    err('WebAssembly memory grew to ' + (size / 1048576).toFixed(0) + ' MiB');\n    return 1;");
+  patch('  if (requestedSize > maxHeapSize) {\n', "  if (requestedSize > maxHeapSize) {\n    err('Memory request above the maximum: ' + requestedSize);\n");
   return new TextEncoder().encode(text);
 }
 
