@@ -3,6 +3,9 @@ set -eu
 mountpoint -q /proc || mount -t proc proc /proc
 mountpoint -q /sys || mount -t sysfs sysfs /sys
 mountpoint -q /dev || mount -t devtmpfs devtmpfs /dev
+# Alpine's initramfs mounts the real root read-only. Normal OpenRC boot would
+# remount it; this minimal init path must perform that step itself.
+mount -o remount,rw /
 mkdir -p /dev/pts /run /tmp /var/log
 mountpoint -q /dev/pts || mount -t devpts devpts /dev/pts
 mountpoint -q /run || mount -t tmpfs -o mode=755 tmpfs /run
