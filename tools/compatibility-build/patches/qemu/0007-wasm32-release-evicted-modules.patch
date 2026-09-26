@@ -1,8 +1,8 @@
 diff --git a/tcg/wasm32.c b/tcg/wasm32.c
-index 97ed765..704b66f 100644
+index 97ed765..dd5ea72 100644
 --- a/tcg/wasm32.c
 +++ b/tcg/wasm32.c
-@@ -102,10 +102,28 @@ __thread uint32_t instance_garbage_collected_local = 0;
+@@ -102,10 +102,30 @@ __thread uint32_t instance_garbage_collected_local = 0;
  struct instance_info {
      uint8_t *tb;
      int fidx;
@@ -13,7 +13,9 @@ index 97ed765..704b66f 100644
 -#define INSTANCE_RUNNING_LEN MAX_INSTANCE_ALIVE
 +/*
 + * Compiled translation blocks are kept per vCPU thread: at most
-+ * MAX_INSTANCE_THREAD each and MAX_INSTANCE_ALIVE in total.
++ * MAX_INSTANCE_THREAD each and MAX_INSTANCE_ALIVE in total. Each module costs
++ * the browser roughly 10 KiB outside WebAssembly memory; a 120,000 cap next to
++ * a 3 GiB guest ran the tab out of memory.
 + *
 + * Modules released from the function table are counted as freed right away.
 + * Waiting for a FinalizationRegistry report stalled compilation for good: a
@@ -27,13 +29,13 @@ index 97ed765..704b66f 100644
 + * the oldest half and recompiling it at once made busy threads spend most of
 + * their time compiling the same blocks again.
 + */
-+#define MAX_INSTANCE_ALIVE 120000
-+#define MAX_INSTANCE_THREAD 50000
++#define MAX_INSTANCE_ALIVE 48000
++#define MAX_INSTANCE_THREAD 24000
 +#define INSTANCE_RUNNING_LEN MAX_INSTANCE_THREAD
  __thread struct instance_info instance_running[INSTANCE_RUNNING_LEN];
  __thread int instance_running_begin = 0;
  __thread int instance_running_end = 0;
-@@ -116,7 +134,8 @@ __thread static int to_remove_instance_idx = 0;
+@@ -116,7 +136,8 @@ __thread static int to_remove_instance_idx = 0;
  
  static bool can_add_instance()
  {
@@ -43,7 +45,7 @@ index 97ed765..704b66f 100644
  }
  
  static void inc_instance_local()
-@@ -125,49 +144,64 @@ static void inc_instance_local()
+@@ -125,49 +146,64 @@ static void inc_instance_local()
      instance_alive_local++;
  }
  
@@ -132,7 +134,7 @@ index 97ed765..704b66f 100644
  
      instance_running_end  = (instance_running_end+1)%INSTANCE_RUNNING_LEN;
      inc_instance_local();
-@@ -183,11 +217,13 @@ static int get_instance_running_local(void *tb_ptr)
+@@ -183,11 +219,13 @@ static int get_instance_running_local(void *tb_ptr)
          return 0;
      }
      if (elm->tb != tb_ptr) {

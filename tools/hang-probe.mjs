@@ -99,31 +99,55 @@ async function captureStacks() {
   return stacks;
 }
 
+// Liveness: once the serial shell is up, each sample types "echo tick-N"
+// and checks that the previous tick came back. The display is sampled too.
 const started = Date.now();
-let commandSent = !guestCommand, unanswered = 0;
+let commandSent = !guestCommand, missed = 0, tick = 0;
 try {
   while (Date.now() - started < 90 * 60000) {
-    await sleep(15000);
+    await sleep(20000);
     const sample = await evaluate(`(async () => {
       const r = window.guestReport || {};
       const race = (p, ms) => Promise.race([p, new Promise(res => setTimeout(() => res('TIMEOUT'), ms))]);
       const qmp = window.guestMonitor?.ready ? await race(window.guestMonitor.execute('query-status').then(s => s.status).catch(e => 'ERR ' + e.message), 8000) : 'not ready';
-      return {t: Math.round(performance.now() / 1000), state: r.state, serialLen: (r.serial || '').length, qmp,
-        tail: (r.serial || '').slice(-160), jit: (r.logs || []).filter(l => l.includes('JIT')).slice(-1)[0] || ''};
+      let display = null;
+      try {
+        const c = document.getElementById('canvas'), probe = document.createElement('canvas');
+        probe.width = 64; probe.height = 36; const g = probe.getContext('2d'); g.drawImage(c, 0, 0, 64, 36);
+        const d = g.getImageData(0, 0, 64, 36).data; let h = 0; for (let i = 0; i < d.length; i++) h = (h * 31 + d[i]) >>> 0; display = h;
+      } catch {}
+      const serial = r.serial || '';
+      return {t: Math.round(performance.now() / 1000), state: r.state, serialLen: serial.length, qmp, display,
+        ready: serial.includes('BROWSER_LINUX_SERIAL_READY'), ticks: (serial.match(/tick-[0-9]+-ok/g) || []).slice(-1)[0] || '',
+        tail: serial.slice(-120), jit: (r.logs || []).filter(l => l.includes('JIT')).slice(-1)[0] || ''};
     })()`);
+    // Largest Chrome process (the tab's renderer) in MiB, via wmic on Windows.
+    if (typeof sample === 'object') {
+      try {
+        const {execSync} = await import('node:child_process');
+        const rows = execSync('wmic process where "name=\'chrome.exe\'" get PrivatePageCount /format:csv', {encoding: 'utf8'});
+        sample.chromeMiB = Math.max(...rows.split(/\r?\n/).map(line => Number(line.split(',')[1]) || 0)) / 1048576 | 0;
+      } catch {}
+    }
     report.samples.push(sample);
     console.log(JSON.stringify(sample));
-    if (!commandSent && typeof sample === 'object' && sample.tail?.includes('BROWSER_LINUX_SERIAL_READY')) {
+    if (typeof sample !== 'object') { if (++missed >= 3) { report.stacks = await captureStacks(); break; } continue; }
+    if (sample.state === 'error') break;
+    if (!sample.ready) continue;
+    if (!commandSent) {
       await evaluate(`window.guestTerminal.input(${JSON.stringify(guestCommand + '\r')}, true), true`);
       commandSent = true;
       report.commandAt = sample.t;
+      continue;
     }
-    if (typeof sample === 'object' && sample.state === 'error') break;
-    unanswered = sample?.qmp === 'TIMEOUT' || sample === 'EVALUATE TIMEOUT' ? unanswered + 1 : 0;
-    if (unanswered >= 3) {
+    if (tick > 0) missed = sample.ticks === `tick-${tick}-ok` ? 0 : missed + 1;
+    if (missed >= 4) {
+      report.frozenAt = sample.t;
       report.stacks = await captureStacks();
       break;
     }
+    tick++;
+    await evaluate(`window.guestTerminal.input('echo tick-${tick}-ok\\r', true), true`);
   }
 } finally {
   report.finished = new Date().toISOString();
