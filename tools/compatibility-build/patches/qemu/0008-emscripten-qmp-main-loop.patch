@@ -1,0 +1,22 @@
+diff --git a/monitor/qmp.c b/monitor/qmp.c
+index 6eee450..32dc27e 100644
+--- a/monitor/qmp.c
++++ b/monitor/qmp.c
+@@ -540,8 +540,17 @@ void monitor_init_qmp(Chardev *chr, bool pretty, Error **errp)
+     qemu_chr_fe_set_echo(&mon->common.chr, true);
+ 
+     /* Note: we run QMP monitor in I/O thread when @chr supports that */
++#ifdef __EMSCRIPTEN__
++    /*
++     * Emscripten's poll() never blocks, so a monitor I/O thread would spin,
++     * proxying a poll to the browser's main thread on every iteration, and
++     * its requests went unanswered. Serve QMP from the main loop instead.
++     */
++    monitor_data_init(&mon->common, true, false, false);
++#else
+     monitor_data_init(&mon->common, true, false,
+                       qemu_chr_has_feature(chr, QEMU_CHAR_FEATURE_GCONTEXT));
++#endif
+ 
+     mon->pretty = pretty;
+ 
