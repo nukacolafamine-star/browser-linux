@@ -94,12 +94,17 @@ def screendump(name):
     header = re.match(rb"P6\s+(\d+)\s+(\d+)\s+255\s", data)
     assert header, "Expected binary PPM framebuffer"
     pixels = data[header.end():]
-    # Share of sampled pixels that are not near-black (the launcher shows a
-    # black loading screen until its web interface has painted).
+    # Shares of sampled pixels that are not near-black, that are the plain gray
+    # (#303030) the launcher window shows until its web interface has painted,
+    # and that are green like the interface's sign-in button.
     samples = range(0, len(pixels) - 2, 3 * 17)
+    count = max(1, len(samples))
     lit = sum(1 for i in samples if pixels[i] + pixels[i + 1] + pixels[i + 2] > 96)
+    blank = sum(1 for i in samples if all(40 <= pixels[i + k] <= 56 for k in range(3)))
+    green = sum(1 for i in samples if pixels[i + 1] > 100 and pixels[i + 1] > pixels[i] + 40 and pixels[i + 1] > pixels[i + 2] + 40)
     return {"width": int(header[1]), "height": int(header[2]), "distinctByteValues": len(set(pixels)),
-            "litFraction": round(lit / max(1, len(samples)), 3), "sha256": hashlib.sha256(data).hexdigest()}
+            "litFraction": round(lit / count, 3), "blankFraction": round(blank / count, 3),
+            "greenFraction": round(green / count, 4), "sha256": hashlib.sha256(data).hexdigest()}
 
 
 def rebuild_disk():
@@ -229,19 +234,26 @@ try:
                 time.sleep(15)
             launcher["windows"] = windows
             launcher["windowSeconds"] = round(time.monotonic() - launch_started, 3)
-            # Wait for the web interface (sign-in page) to replace the loading screen.
+            # Wait for the web interface (sign-in page) to replace the plain gray window.
             ui_deadline = time.monotonic() + 300
             while launcher.get("opened"):
                 time.sleep(15)
                 launcher["screen"] = screendump("launcher.ppm")
-                if launcher["screen"]["litFraction"] > 0.15:
+                if launcher["screen"]["blankFraction"] < 0.3:
                     launcher["interfaceSeconds"] = round(time.monotonic() - launch_started, 3)
+                    launcher["signInButton"] = launcher["screen"]["greenFraction"] > 0.008
                     break
                 if time.monotonic() > ui_deadline:
                     break
             if "screen" not in launcher:
                 time.sleep(20)
                 launcher["screen"] = screendump("launcher.ppm")
+            # Launcher processes with the IPC timeout library (ipc-timeout.c) loaded;
+            # /proc/*/cmdline keeps the arguments from before it added the switch.
+            counts = run("echo HELPER_COUNT=$(grep -l libbrowser-linux-ipc-timeout /proc/[0-9]*/maps 2>/dev/null | wc -l) "
+                         "PAGE_COUNT=$(cat /home/user/.minecraft/launcher_log*.txt 2>/dev/null | grep -a -c 'OnContextCreated: main')", "COUNTS")
+            launcher["processesWithIpcTimeout"] = int((re.search(r"HELPER_COUNT=(\d+)", counts) or [0, 0])[1])
+            launcher["pageLoaded"] = int((re.search(r"PAGE_COUNT=(\d+)", counts) or [0, 0])[1]) > 0
             launcher["log"] = run("tail -n 40 /tmp/minecraft-launcher.log; ls -la /home/user/.minecraft /home/user/.minecraft/launcher 2>&1 | head -n 40; tail -n 30 /home/user/.minecraft/launcher_log.txt 2>/dev/null", "LAUNCHLOG")[-8000:]
             missing = run("for f in /home/user/.minecraft/launcher/minecraft-launcher /home/user/.minecraft/launcher/*.so; do "
                           "ldd \"$f\" 2>/dev/null | grep 'not found' | sed \"s|^|$(basename $f): |\"; done", "LDD", 120)
@@ -251,8 +263,13 @@ try:
                 report["checks"].append(f"Official Minecraft Launcher bootstrap downloaded from Mojang and opened its updater in {launcher['firstWindowSeconds']}s")
             if launcher["opened"]:
                 report["checks"].append(f"The Minecraft Launcher's main window opened in {launcher['windowSeconds']}s")
+            if launcher["pageLoaded"]:
+                report["checks"].append("The launcher's embedded browser loaded its interface page")
             if launcher.get("interfaceSeconds"):
-                report["checks"].append(f"The launcher's interface painted in {launcher['interfaceSeconds']}s")
+                shown = "sign-in page" if launcher.get("signInButton") else "interface"
+                report["checks"].append(f"The launcher's {shown} painted in {launcher['interfaceSeconds']}s")
+            if launcher["processesWithIpcTimeout"]:
+                report["checks"].append(f"{launcher['processesWithIpcTimeout']} launcher processes loaded the Chromium IPC timeout library")
         except Exception as error:
             launcher["error"] = str(error)
 

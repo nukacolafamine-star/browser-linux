@@ -27,12 +27,15 @@ RUN cd linux && make x86_64_defconfig kvm_guest.config && \
     mkdir /out && cp arch/x86/boot/bzImage /out/bzImage && cp .config /out/kernel.config && \
     make -s kernelrelease > /out/kernel-release.txt
 
-# The launcher's certificate shortcut (see fast-ca.c), built for the guest.
-FROM ${DEBIAN_IMAGE} AS fastca
+# Libraries preloaded into the Minecraft Launcher, built for the guest: its
+# certificate shortcut (fast-ca.c) and longer Chromium IPC timeouts (ipc-timeout.c).
+FROM ${DEBIAN_IMAGE} AS preload
 RUN apt-get update && apt-get install -y --no-install-recommends gcc libc6-dev && rm -rf /var/lib/apt/lists/*
-COPY desktop/fast-ca.c desktop/fast-ca-test.c /src/
+COPY desktop/fast-ca.c desktop/fast-ca-test.c desktop/ipc-timeout.c desktop/ipc-timeout-test.c /src/
 RUN mkdir /out && gcc -O2 -Wall -Werror -shared -fPIC -o /out/libbrowser-linux-fast-ca.so /src/fast-ca.c -ldl && \
-    gcc -O2 -Wall -Werror -o /out/fast-ca-test /src/fast-ca-test.c -ldl
+    gcc -O2 -Wall -Werror -o /out/fast-ca-test /src/fast-ca-test.c -ldl && \
+    gcc -O2 -Wall -Werror -shared -fPIC -o /out/libbrowser-linux-ipc-timeout.so /src/ipc-timeout.c -ldl && \
+    gcc -O2 -Wall -Werror -o /out/ipc-timeout-test /src/ipc-timeout-test.c
 
 FROM ${DEBIAN_IMAGE} AS rootfs
 ENV DEBIAN_FRONTEND=noninteractive
@@ -55,8 +58,8 @@ RUN for group in sudo video input render audio tty; do getent group "$group" > /
     printf 'browser-linux\n' > /etc/hostname && \
     : > /etc/machine-id && mkdir -p /var/lib/dbus && rm -f /var/lib/dbus/machine-id && ln -s /etc/machine-id /var/lib/dbus/machine-id
 COPY desktop/rootfs/ /
-COPY --from=fastca /out/libbrowser-linux-fast-ca.so /usr/local/lib/browser-linux/
-COPY --from=fastca /out/fast-ca-test /tmp/fast-ca-test
+COPY --from=preload /out/libbrowser-linux-fast-ca.so /out/libbrowser-linux-ipc-timeout.so /usr/local/lib/browser-linux/
+COPY --from=preload /out/fast-ca-test /out/ipc-timeout-test /tmp/
 COPY desktop/make-icon.py /tmp/make-icon.py
 RUN chmod 755 /usr/local/sbin/browser-boot /usr/local/sbin/browser-desktop /usr/local/sbin/browser-exchange \
       /usr/local/sbin/browser-halt /usr/local/bin/browser-session /usr/local/bin/browser-welcome \
@@ -65,6 +68,9 @@ RUN chmod 755 /usr/local/sbin/browser-boot /usr/local/sbin/browser-desktop /usr/
     cp /usr/share/ca-certificates/mozilla/ISRG_Root_X1.crt /etc/ssl/browser-linux-ca.pem && \
     test -s /etc/ssl/browser-linux-ca.pem && test -e /etc/ssl/certs/ca-certificates.crt && \
     LD_PRELOAD=/usr/local/lib/browser-linux/libbrowser-linux-fast-ca.so /tmp/fast-ca-test && rm /tmp/fast-ca-test && \
+    for mode in plain --type=utility --type=zygote; do \
+      LD_PRELOAD=/usr/local/lib/browser-linux/libbrowser-linux-ipc-timeout.so /tmp/ipc-timeout-test "$mode" || exit 1; \
+    done && rm /tmp/ipc-timeout-test && \
     mkdir -p /usr/share/icons/browser-linux && python3 /tmp/make-icon.py /usr/share/icons/browser-linux/minecraft-launcher.png && \
     rm /tmp/make-icon.py && \
     test -f /usr/share/weston/terminal.png && \

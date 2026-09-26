@@ -49,5 +49,9 @@ cd "$HOME"
 export GDK_BACKEND=x11
 # The launcher's own TLS (libcurl) loads the whole certificate bundle for each
 # connection; this looks authorities up in /etc/ssl/certs instead (fast-ca.c).
-export LD_PRELOAD=/usr/local/lib/browser-linux/libbrowser-linux-fast-ca.so${LD_PRELOAD:+:$LD_PRELOAD}
+# Its embedded Chromium's helper processes give up after 15 seconds without
+# an IPC connection, too short while the launcher starts under emulation; this
+# gives them 10 minutes (ipc-timeout.c).
+preload=/usr/local/lib/browser-linux
+export LD_PRELOAD=$preload/libbrowser-linux-fast-ca.so:$preload/libbrowser-linux-ipc-timeout.so${LD_PRELOAD:+:$LD_PRELOAD}
 exec "$launcher" --workDir "$HOME/.minecraft" "$@"
