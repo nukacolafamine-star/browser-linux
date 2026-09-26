@@ -55,15 +55,17 @@ Measured in Chromium 152 on an 8-core desktop (i7-9700K), 2 virtual processors, 
 
 Mojang's servers (Azure Front Door) close a TLS connection whose handshake is not finished within about 5 seconds of the ClientHello, which emulated OpenSSL could not meet while it parsed the 146-certificate bundle for each connection. The guest therefore points OpenSSL at the hashed certificate directory (`SSL_CERT_FILE`, `SSL_CERT_DIR`), and the launcher, whose libcurl names the bundle explicitly, runs with a small preload library (`desktop/fast-ca.c`) that substitutes the same directory lookup. Verification is unchanged; only the loading strategy differs. The launcher retries downloads that are still dropped.
 
+The launcher's interface is a web page in an embedded Chromium (CEF 127). Chromium's helper processes (network service, storage service, GPU process, renderers) exit if their IPC channel to the main process is not connected within 15 seconds. In the browser the launcher's main process is busy for longer than that while it starts, so the network service exited, the interface page loading through it failed, and the launcher window stayed an empty gray. Chromium's `--ipc-connection-timeout` switch lengthens the wait, but the launcher does not pass its command line on to Chromium, so a second preload library (`desktop/ipc-timeout.c`) adds `--ipc-connection-timeout=600` to every helper: to the arguments of helpers started with `exec`, and to the fork requests a Chromium zygote receives for the helpers it forks. The desktop image build tests both paths.
+
 ## Verification
 
 - `npm test` includes the user-mode network (ARP, DHCP, DNS, ICMP, TCP bulk transfer both ways with flow control, retransmission, half-close and refusals, UDP), the WebSocket relay end to end through the real server, the chunk store (lazy fetch, sharing, prefetch, copy-on-write persistence, unflushed-write semantics, TRIM quarantine, torn-table recovery), the NBD server using QEMU's negotiation, and a round trip from the Python chunker through the browser chunk store.
-- `tools/compatibility-build/verify-desktop.py` runs in CI with native QEMU: it rebuilds the disk from the published chunks, boots the guest, and checks the serial shell, DNS, HTTPS and `apt-get update` through the guest's network card, Xwayland serving an X11 client, Mesa OpenGL (llvmpipe, OpenGL 4.5 core), keyboard input typed into the Wayland terminal, the file exchange, and clean shutdown. With `--launcher` it downloads the official launcher from Mojang inside the guest and waits for its windows.
+- `tools/compatibility-build/verify-desktop.py` runs in CI with native QEMU: it rebuilds the disk from the published chunks, boots the guest, and checks the serial shell, DNS, HTTPS and `apt-get update` through the guest's network card, Xwayland serving an X11 client, Mesa OpenGL (llvmpipe, OpenGL 4.5 core), keyboard input typed into the Wayland terminal, the file exchange, and clean shutdown. With `--launcher` it downloads the official launcher from Mojang inside the guest, waits for its windows, and checks that its interface page loaded and painted, and waits for the green "Sign in with Microsoft" button.
 - `tools/desktop-test.mjs` drives the real Start Linux page in installed Chrome: boot, serial shell, Internet through the relay, exact typing through the canvas, and a file surviving shutdown and restart.
 
-Results so far (CI run 36186934280, native TCG): serial shell in 15.7 s and desktop in 16.0 s; every check passed. The official Minecraft Launcher downloaded from `launcher.mojang.com` (its SHA-256 matched the build the Flathub and Arch packages pin), installed, and opened its X11 window through Xwayland 17 s after starting.
+Results so far (CI run 36186934280, native TCG): serial shell in 15.7 s and desktop in 16.0 s; every check passed. The official Minecraft Launcher downloaded from `launcher.mojang.com` (its SHA-256 matched the build the Flathub and Arch packages pin), installed, and opened its X11 window through Xwayland 17 s after starting. In CI run 36212074414 its main window opened after 81 s and its interface page loaded and painted by 96 s, with the IPC timeout library loaded in 12 launcher processes.
 
-## GPU acceleration (in progress)
+## GPU acceleration (experimental)
 
 The path to accelerated guest OpenGL is VirGL: Mesa's `virgl` driver in the guest sends Gallium commands through virtio-gpu to virglrenderer, which issues OpenGL ES calls that the browser executes with WebGL 2. The browser build (`gpu-stage.Dockerfile`, opt-in CI job) consists of:
 
@@ -73,13 +75,28 @@ The path to accelerated guest OpenGL is VirGL: Mesa's `virgl` driver in the gues
 - QEMU's SDL OpenGL display using virtual contexts, rendering in QEMU's thread through OffscreenCanvas. The window requests OpenGL ES 3.0 (SDL's default of ES 2.0 made Emscripten create a WebGL 1 context), BGRA uploads are converted to RGBA, GL errors stay with the virtual context that raised them, and fence waits never block (WebGL's maximum client wait is 0);
 - a main loop that returns to the browser about 60 times a second (through Asyncify): a worker's OffscreenCanvas is presented, and WebGL sync objects signal, only between tasks.
 
-Known WebGL 2 limits: no geometry or tessellation shaders, compute, texture buffers or texture swizzle. virglrenderer therefore offers the guest roughly OpenGL 3.1-level features; Minecraft's OpenGL 3.3 core context can be requested with Mesa's `MESA_GL_VERSION_OVERRIDE=3.3`, which works when the game does not use the missing features. Browser WebGPU does not provide a Vulkan driver to the guest.
+Status (`?gpu=1`, build 10409e7c6a5eadeb, Chrome): the guest boots to the desktop with Weston's GL renderer running on VirGL, `glxinfo` reports `virgl (WebKit WebGL)` with hardware acceleration, and `glxgears` renders at 14–18 frames per second through WebGL 2 with no WebGL errors.
+
+Known WebGL 2 limits: no geometry or tessellation shaders, compute, texture buffers, conditional rendering, per-target blend enables or texture swizzle. virglrenderer reports GLSL 1.30 for an OpenGL ES 3.0 host, so Mesa offers the guest OpenGL 2.1 (and OpenGL ES 2.0). `MESA_GL_VERSION_OVERRIDE=3.3 MESA_GLSL_VERSION_OVERRIDE=330` yields a 3.3 core context, but without `GL_ARB_uniform_buffer_object` (Mesa enables it only from GLSL 1.40), which current Minecraft needs, so the game should use the default CPU renderer (llvmpipe: OpenGL 4.5 core; lavapipe: Vulkan 1.4). Reporting a higher GLSL level for WebGL 2 hosts in virglrenderer is the next step on this path. Browser WebGPU does not provide a Vulkan driver to the guest.
 
 ## Minecraft
 
-`minecraft-launcher` (also on the desktop panel) downloads the official launcher from Mojang into the user's home directory and starts it. Nothing from Mojang is part of the image. The launcher needs Internet access through the local server, and signing in uses the player's own Microsoft account inside the launcher; Browser Linux never handles credentials. The launcher then downloads the game, its Java runtime and assets (about 1 GB) into the guest disk. Choose 3 GiB of Linux memory for the game.
+`minecraft-launcher` (also on the desktop panel) downloads the official launcher from Mojang into the user's home directory and starts it. Nothing from Mojang is part of the image. The launcher needs Internet access through the local server, and signing in uses the player's own Microsoft account inside the launcher; Browser Linux never handles credentials. The launcher then downloads the game, its Java runtime and assets (about 1 GB) into the guest disk. Choose 3 GiB of Linux memory and 4 processors.
 
-Expect the game to be very slow: every instruction of the game, its Java runtime and (without VirGL) its renderer is emulated. Measurements will be recorded here as they are made.
+First start in the browser (build 10409e7c6a5eadeb, Chrome 152, i7-9700K, 3 GiB, 4 virtual processors, temporary disk), timed from clicking the panel icon on a freshly started desktop:
+
+| Step | Time after the click |
+|---|---|
+| Launcher bootstrap downloaded from Mojang, checksum matched, installed | under 30 s |
+| Bootstrap updated itself and the launcher (533 MB in `~/.minecraft`) | 6 min 13 s |
+| Launcher main window open | 10 min 8 s |
+| Interface page loaded in the embedded browser | 11 min |
+| Interface running (first calls into the launcher) | 14 min 20 s |
+| "Sign in with Microsoft" page on screen | by 18 min |
+
+No launcher helper process exited during this run. Clicking **Sign in with Microsoft** opened Microsoft's sign-in page in the launcher's sign-in window about 3 minutes later (Xbox Live device authentication succeeded first). Later starts skip the downloads. Signing in, downloading and running the game have not been tested, because they need the player's account.
+
+Expect the game to be very slow: every instruction of the game, its Java runtime and its renderer (Mesa llvmpipe, OpenGL 4.5 core) is emulated. The launcher keeps some account tokens through the Secret Service (libsecret) and logs that none is available: the desktop has a D-Bus session but no keyring. Whether that makes it ask the player to sign in again on each start has not been verified.
 
 ## Running it
 

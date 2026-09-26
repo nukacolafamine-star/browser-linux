@@ -234,14 +234,16 @@ try:
                 time.sleep(15)
             launcher["windows"] = windows
             launcher["windowSeconds"] = round(time.monotonic() - launch_started, 3)
-            # Wait for the web interface (sign-in page) to replace the plain gray window.
+            # Wait for the web interface to replace the plain gray window (it
+            # shows its own loading animation first), then for the sign-in page.
             ui_deadline = time.monotonic() + 300
             while launcher.get("opened"):
                 time.sleep(15)
                 launcher["screen"] = screendump("launcher.ppm")
-                if launcher["screen"]["blankFraction"] < 0.3:
+                if launcher["screen"]["blankFraction"] < 0.3 and not launcher.get("interfaceSeconds"):
                     launcher["interfaceSeconds"] = round(time.monotonic() - launch_started, 3)
-                    launcher["signInButton"] = launcher["screen"]["greenFraction"] > 0.008
+                if launcher["screen"]["greenFraction"] > 0.008:
+                    launcher["signInSeconds"] = round(time.monotonic() - launch_started, 3)
                     break
                 if time.monotonic() > ui_deadline:
                     break
@@ -266,8 +268,9 @@ try:
             if launcher["pageLoaded"]:
                 report["checks"].append("The launcher's embedded browser loaded its interface page")
             if launcher.get("interfaceSeconds"):
-                shown = "sign-in page" if launcher.get("signInButton") else "interface"
-                report["checks"].append(f"The launcher's {shown} painted in {launcher['interfaceSeconds']}s")
+                report["checks"].append(f"The launcher's interface page painted in {launcher['interfaceSeconds']}s")
+            if launcher.get("signInSeconds"):
+                report["checks"].append(f"The launcher showed its Microsoft sign-in button in {launcher['signInSeconds']}s")
             if launcher["processesWithIpcTimeout"]:
                 report["checks"].append(f"{launcher['processesWithIpcTimeout']} launcher processes loaded the Chromium IPC timeout library")
         except Exception as error:

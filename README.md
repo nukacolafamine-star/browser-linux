@@ -49,7 +49,7 @@ Keep exported backups of work you care about. Browser data can be cleared, and p
 
 This is the first working foundation, not a finished general-purpose Linux distribution. In the default Linux/Wasm mode, the desktop interface is a browser application; Linux supplies the kernel, processes, command-line programs and filesystem. That mode has no X11/Wayland desktop, conventional package repository, guest networking, GPU acceleration or ability to launch ordinary x86/ARM Linux binaries. Applications need to target its experimental Linux/Wasm ABI.
 
-A separate [x86-64 and Wayland compatibility engine](docs/COMPATIBILITY.md) is in development. It uses real QEMU-Wasm, a standard Linux kernel and Weston, with browser feature checks rather than a browser allowlist. Browser desktop, full-disk save/restore and application acceptance are tracked separately; this work does not establish Minecraft or GPU acceleration support.
+A separate [x86-64 Linux desktop engine](docs/COMPATIBILITY.md) (**Start Linux**) runs Debian 13 with the Weston Wayland desktop and Xwayland on an x86-64 PC emulated by QEMU-Wasm, with apt, Internet access through the local server, and a disk saved in the browser. The official Minecraft Launcher downloads from Mojang, installs and runs inside it, up to Microsoft's sign-in page; signing in, and the game itself, are left to the player and have not been tested past that point. Everything is emulated, so it is slow: the launcher takes several minutes to open. Experimental GPU acceleration (`?gpu=1`) renders guest OpenGL through WebGL 2 (VirGL); it offers OpenGL 2.1 without overrides, which is not enough for Minecraft, so the game uses the CPU renderer.
 
 **Intermittent binary-data corruption and occasional boot stalls were observed during development. Their root causes remain unresolved.** Subsequent repeated restart tests passed. Writes and restores now have integrity checks that stop a failed session before it can replace the saved backup. A boot that does not reach the shell times out and offers a restart. These checks do not establish that the underlying kernel is reliable or detect every possible later corruption. Use this as a development prototype, not the only copy of important data.
 
@@ -57,7 +57,7 @@ Version 0.1.1 corrects the kernel's shared-lock polling instructions after a rep
 
 Chrome, Edge and a portable WebKit engine were tested on this Windows machine. The user subsequently confirmed that version 0.1.1 works well on their iPhone. Portable WebKit tests remain separate from physical iPhone tests. The responsive phone layout was tested at 390 pixels. Support is determined by capabilities, not a browser allowlist; "any browser" and "all native performance" remain objectives rather than demonstrated capabilities.
 
-The `feature/portable-compatibility` branch adds an isolated x86-64/Wayland development path. See [compatibility implementation and acceptance](docs/COMPATIBILITY.md). It preserves this working lightweight engine and does not claim Minecraft or guest GPU acceleration.
+The `feature/desktop-platform` branch carries the x86-64 desktop engine alongside this lightweight engine. See [compatibility implementation and measurements](docs/COMPATIBILITY.md).
 
 ## Development
 
