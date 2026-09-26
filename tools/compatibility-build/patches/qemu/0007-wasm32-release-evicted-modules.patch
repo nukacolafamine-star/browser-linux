@@ -1,8 +1,19 @@
 diff --git a/tcg/wasm32.c b/tcg/wasm32.c
-index 97ed765..dd5ea72 100644
+index 97ed765..2d4882c 100644
 --- a/tcg/wasm32.c
 +++ b/tcg/wasm32.c
-@@ -102,10 +102,30 @@ __thread uint32_t instance_garbage_collected_local = 0;
+@@ -92,6 +92,10 @@ EM_JS(void, remove_module_js, (), {
+             removeFunction(memory_v.getUint32(Module.__wasm32_tb.to_remove_instance_ptr + i, true));
+         }
+         memory_v.setInt32(Module.__wasm32_tb.to_remove_instance_idx_ptr, 0, true);
++        /* Released modules hold memory outside the JavaScript heap, which
++           does not prompt a garbage collection in a busy worker; announcing
++           a comparable amount of external memory does. */
++        new ArrayBuffer(Math.min(remove_n * 16384, 268435456));
+     });
+ 
+ int instance_alive_global = 0;
+@@ -102,10 +106,30 @@ __thread uint32_t instance_garbage_collected_local = 0;
  struct instance_info {
      uint8_t *tb;
      int fidx;
@@ -35,7 +46,7 @@ index 97ed765..dd5ea72 100644
  __thread struct instance_info instance_running[INSTANCE_RUNNING_LEN];
  __thread int instance_running_begin = 0;
  __thread int instance_running_end = 0;
-@@ -116,7 +136,8 @@ __thread static int to_remove_instance_idx = 0;
+@@ -116,7 +140,8 @@ __thread static int to_remove_instance_idx = 0;
  
  static bool can_add_instance()
  {
@@ -45,7 +56,7 @@ index 97ed765..dd5ea72 100644
  }
  
  static void inc_instance_local()
-@@ -125,49 +146,64 @@ static void inc_instance_local()
+@@ -125,49 +150,64 @@ static void inc_instance_local()
      instance_alive_local++;
  }
  
@@ -134,7 +145,7 @@ index 97ed765..dd5ea72 100644
  
      instance_running_end  = (instance_running_end+1)%INSTANCE_RUNNING_LEN;
      inc_instance_local();
-@@ -183,11 +219,13 @@ static int get_instance_running_local(void *tb_ptr)
+@@ -183,11 +223,13 @@ static int get_instance_running_local(void *tb_ptr)
          return 0;
      }
      if (elm->tb != tb_ptr) {

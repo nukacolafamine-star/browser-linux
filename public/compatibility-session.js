@@ -326,8 +326,8 @@ function withCrashStacks(bytes) {
   const jitReport = "err('JIT thread ' + Module.__wasm32_tb.cur_core_num + ': ' + JSON.stringify(Module.__jitStats))";
   patch('  Module.__wasm32_tb.inst_gc_registry.register(inst, "instance");\n',
     `  Module.__wasm32_tb.inst_gc_registry.register(inst, "instance");\n  if (++${jitStats}.made % 5000 === 0) ${jitReport};\n`);
-  patch('  memory_v.setInt32(Module.__wasm32_tb.to_remove_instance_idx_ptr, 0, true);\n}',
-    `  memory_v.setInt32(Module.__wasm32_tb.to_remove_instance_idx_ptr, 0, true);\n  ${jitStats}.removed += remove_n; ${jitReport};\n}`);
+  patch('  memory_v.setInt32(Module.__wasm32_tb.to_remove_instance_idx_ptr, 0, true);\n',
+    `  memory_v.setInt32(Module.__wasm32_tb.to_remove_instance_idx_ptr, 0, true);\n  ${jitStats}.removed += remove_n; ${jitReport};\n`);
   patch('        memory_v.setInt32(Module.__wasm32_tb.instance_garbage_collected_ptr, v + 1, true);\n',
     `        memory_v.setInt32(Module.__wasm32_tb.instance_garbage_collected_ptr, v + 1, true);\n        if (++${jitStats}.collected % 2000 === 0) ${jitReport};\n`);
   patch('  if (requestedSize > maxHeapSize) {\n', "  if (requestedSize > maxHeapSize) {\n    err('Memory request above the maximum: ' + requestedSize);\n");
